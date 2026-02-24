@@ -1,0 +1,27 @@
+camera:
+  intrinsics_file: "config/camera.yaml"
+  board_rows:  6
+  board_cols:  9
+  square_size: 0.025
+
+lidar:
+  roi_min:
+    x: -2.0
+    y: -2.0
+    z: 0.0
+  roi_max:
+    x: 2.0
+    y: 2.0
+    z: 0.0  
+  ransac_threshold: 0.01
+  ransac_max_iterations:  1000
+
+data:
+  images_dir: "data/images"
+  pointclouds_dir: "data/pointclouds_dir"
+
+
+output: 
+  result_file: "results/calibration.yaml"
+  generate_visualization: true
+

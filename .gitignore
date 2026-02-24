@@ -1,0 +1,9 @@
+# Build artifacts
+build/
+
+# VS Code (optional)
+.vscode/
+
+# Binaries
+*.out
+*.bin

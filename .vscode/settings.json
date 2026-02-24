@@ -1,0 +1,4 @@
+{
+    "cmake.sourceDirectory": "/home/saikiran/camera_lidar_calibration/src/ceres-solver",
+    "C_Cpp.errorSquiggles": "disabled"
+}
