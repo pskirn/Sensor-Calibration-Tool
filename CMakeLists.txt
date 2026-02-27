@@ -10,13 +10,22 @@ find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 find_package(Ceres REQUIRED)
 find_package(yaml-cpp REQUIRED)
 
+# # Debug prints – very important right now
+# message(STATUS "----------------------------------------")
+# message(STATUS "OpenCV_VERSION:     ${OpenCV_VERSION}")
+# message(STATUS "OpenCV_INCLUDE_DIRS:${OpenCV_INCLUDE_DIRS}")
+# message(STATUS "OpenCV_LIBS:        ${OpenCV_LIBS}")
+# message(STATUS "EIGEN3_INCLUDE_DIR: ${EIGEN3_INCLUDE_DIR}")   # common var name
+# message(STATUS "EIGEN3_INCLUDE_DIRS:${EIGEN3_INCLUDE_DIRS}") # sometimes this one
+# message(STATUS "----------------------------------------")
+
 
 add_definitions(${PCL_DEFINITIONS})
 
 set(SOURCES src/main.cpp)
 
 
-add_executable(${PROJECT_NAME} src/main.cpp src/config.cpp)
+add_executable(${PROJECT_NAME} src/main.cpp src/config.cpp src/camera_detector.cpp)
 
 
 target_include_directories(
@@ -25,7 +34,8 @@ target_include_directories(
     include/ 
     ${OpenCV_INCLUDE_DIRS} 
     ${PCL_INCLUDE_DIRS}
-    ${EIGEN3_INCLUDE_DIRS}
+    ${EIGEN3_INCLUDE_DIR}
+    # ${EIGEN3_INCLUDE_DIRS}
 
 )
 

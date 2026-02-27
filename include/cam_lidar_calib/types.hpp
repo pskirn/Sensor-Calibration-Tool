@@ -1,13 +1,16 @@
-#pragma once
+#ifndef TYPES_HPP
+#define TYPES_HPP
 
 #include <iostream>
 #include <stdlib.h>
-#include <eigen3/Eigen/Dense>
-#include <eigen3/Eigen/Geometry>
+#include <Eigen/Dense>
+#include <Eigen/Geometry>
 
 #include <vector>
 #include <string>
 #include <optional>
+
+#include <opencv2/core.hpp>
 
 #define EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
@@ -44,7 +47,38 @@ namespace cam_lidar_calib {
 
     struct PlaneObservation
     {
-         // Eigen::Vector3d ;
+        Eigen::Vector3d normal;
+        double distance;
+
+        SensorType sensor_type;
+
+        std::vector<Eigen::Vector3d> points;
+
+        int frame_index;
+
+        PlaneObservation (const Eigen::Vector3d& normal_in,
+                            double distance_in,
+                        SensorType sensor_type_in,
+                        std::vector<Eigen::Vector3d> raw_points_in,
+                        int frame_index_in)
+
+            : normal(normal_in.normalized()),
+            distance(distance_in),
+            sensor_type(sensor_type_in),
+            points(raw_points_in),
+            frame_index(frame_index_in)
+        {
+            const double norm = normal.norm();
+            if (norm == 0.0)
+            {
+                throw std::runtime_error("PlaneObservation: normal vector has zero length");
+            }
+
+            normal.normalize();
+
+        };
+
+
     };
 
     struct PlanePair
@@ -61,7 +95,7 @@ namespace cam_lidar_calib {
     struct CalibrationResult
     {
         Eigen::Matrix3d R = Eigen::Matrix3d::Identity();
-        Eigen::Vector3d  T;
+        Eigen::Vector3d  t;
         
 
         double error;
@@ -71,11 +105,11 @@ namespace cam_lidar_calib {
 
         Eigen::Matrix4d getHomogeneous() const
         {
-            Eigen::Matrix4d Transform = Eigen::Matrix4d::Identity();
+            Eigen::Matrix4d T = Eigen::Matrix4d::Identity();
 
-            Transform.block<3,3>(0, 0) = R;
-            Transform.block<3,1>(0, 3) = T;
-            return Transform;
+            T.block<3,3>(0, 0) = R;
+            T.block<3,1>(0, 3) = t;
+            return T;
         }
 
         Eigen::Quaterniond getQuaternion() const
@@ -95,9 +129,9 @@ namespace cam_lidar_calib {
         {
             CalibrationResult output;
             Eigen::Matrix3d R_inv = R.transpose();
-            Eigen::Vector3d T_inv = - R_inv * T;
+            Eigen::Vector3d t_inv = - R_inv * t;
             output.R = R_inv;
-            output.T = T_inv;
+            output.t = t_inv;
 
             output.error = this->error;
             output.residuals = this->residuals;
@@ -130,10 +164,7 @@ namespace cam_lidar_calib {
 
     };
 
-
-
-
-
-
-
 }
+
+
+#endif

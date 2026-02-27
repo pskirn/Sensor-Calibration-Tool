@@ -54,7 +54,6 @@ namespace cam_lidar_calib {
             cfg.visual = output["generate_visualization"].as<bool>();
 
         
-        
         return cfg;
 
     };
