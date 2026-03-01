@@ -2,17 +2,16 @@
 #define TYPES_HPP
 
 #include <iostream>
-#include <stdlib.h>
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
 
 #include <vector>
 #include <string>
-#include <optional>
+#include <stdexcept>
+#include <cmath>
 
-#include <opencv2/core.hpp>
 
-#define EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+constexpr double RAD2DEG = 180.0 / M_PI;
 
 
 namespace cam_lidar_calib {
@@ -24,6 +23,7 @@ namespace cam_lidar_calib {
 
     struct CameraIntrinsics
     {
+        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
         /* data */
         Eigen::Matrix3d K;
         Eigen::VectorXd distortionCoeffs;
@@ -37,6 +37,12 @@ namespace cam_lidar_calib {
             if ((width == 0) || (height == 0))
                 return false;
 
+            if (K(2,2) != 1.0)
+                return false;
+
+            if (distortionCoeffs.size() == 0)
+                return false;
+
             return true;
 
         };
@@ -47,6 +53,7 @@ namespace cam_lidar_calib {
 
     struct PlaneObservation
     {
+        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
         Eigen::Vector3d normal;
         double distance;
 
@@ -57,45 +64,43 @@ namespace cam_lidar_calib {
         int frame_index;
 
         PlaneObservation (const Eigen::Vector3d& normal_in,
-                            double distance_in,
-                        SensorType sensor_type_in,
+                            double distance_in, 
+                            SensorType sensor_type_in,
                         std::vector<Eigen::Vector3d> raw_points_in,
                         int frame_index_in)
 
-            : normal(normal_in.normalized()),
+            : normal(normal_in),
             distance(distance_in),
             sensor_type(sensor_type_in),
             points(raw_points_in),
             frame_index(frame_index_in)
         {
-            const double norm = normal.norm();
-            if (norm == 0.0)
-            {
+            if (normal.norm() == 0.0)
                 throw std::runtime_error("PlaneObservation: normal vector has zero length");
-            }
 
             normal.normalize();
 
-        };
+        }
 
 
     };
 
     struct PlanePair
     {
+        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
         int camera_obs, lidar_obs;
 
         bool isValid() const {
 
-            if ((camera_obs >= 0) && (lidar_obs >= 0))
-                return true;
+            return ((camera_obs >= 0) && (lidar_obs >= 0)) ;
         };
     };
     
     struct CalibrationResult
     {
+        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
         Eigen::Matrix3d R = Eigen::Matrix3d::Identity();
-        Eigen::Vector3d  t;
+        Eigen::Vector3d  t = Eigen::Vector3d::Zero();
         
 
         double error;
@@ -143,7 +148,9 @@ namespace cam_lidar_calib {
     };
 
 
-    struct CalibrationConfig {
+    struct CalibrationConfig 
+    {
+        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
         int rows, cols;
         double square;
