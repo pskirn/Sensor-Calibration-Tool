@@ -23,7 +23,7 @@ namespace cam_lidar_calib {
 
     struct CameraIntrinsics
     {
-        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+        
         /* data */
         Eigen::Matrix3d K;
         Eigen::VectorXd distortionCoeffs;
@@ -53,7 +53,7 @@ namespace cam_lidar_calib {
 
     struct PlaneObservation
     {
-        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+        
         Eigen::Vector3d normal;
         double distance;
 
@@ -63,17 +63,9 @@ namespace cam_lidar_calib {
 
         int frame_index;
 
-        PlaneObservation (const Eigen::Vector3d& normal_in,
-                            double distance_in, 
-                            SensorType sensor_type_in,
-                        std::vector<Eigen::Vector3d> raw_points_in,
-                        int frame_index_in)
+        PlaneObservation (const Eigen::Vector3d& normal_in, double distance_in, SensorType sensor_type_in, std::vector<Eigen::Vector3d> raw_points_in, int frame_index_in)
 
-            : normal(normal_in),
-            distance(distance_in),
-            sensor_type(sensor_type_in),
-            points(raw_points_in),
-            frame_index(frame_index_in)
+                                 :  normal(normal_in), distance(distance_in),  sensor_type(sensor_type_in),         points(raw_points_in),         frame_index(frame_index_in)
         {
             if (normal.norm() == 0.0)
                 throw std::runtime_error("PlaneObservation: normal vector has zero length");
@@ -87,18 +79,19 @@ namespace cam_lidar_calib {
 
     struct PlanePair
     {
-        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-        int camera_obs, lidar_obs;
+        
+        PlaneObservation camera_obs, lidar_obs;
 
         bool isValid() const {
 
-            return ((camera_obs >= 0) && (lidar_obs >= 0)) ;
+            return (camera_obs.normal.norm() > 0.99  && lidar_obs.normal.norm() > 0.99
+                        && camera_obs.distance > 0 && lidar_obs.distance > 0)) ;
         };
     };
     
     struct CalibrationResult
     {
-        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+    
         Eigen::Matrix3d R = Eigen::Matrix3d::Identity();
         Eigen::Vector3d  t = Eigen::Vector3d::Zero();
         
@@ -150,7 +143,6 @@ namespace cam_lidar_calib {
 
     struct CalibrationConfig 
     {
-        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
         int rows, cols;
         double square;

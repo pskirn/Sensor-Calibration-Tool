@@ -12,7 +12,7 @@ namespace cam_lidar_calib {
 
         
         // CAMERA
-        std::cout << "camera section " << std::endl;
+        // std::cout << "camera section " << std::endl;
         YAML::Node cam = root["camera"];
 
         cfg.cameraIntrinsicsPath = cam["intrinsics_file"].as<std::string>();
@@ -22,7 +22,7 @@ namespace cam_lidar_calib {
         
 
         // LIDAR
-        std::cout << "lidar section " << std::endl;
+        // std::cout << "lidar section " << std::endl;
         YAML::Node lid = root["lidar"];
 
         cfg.x_min = lid["roi_min"]["x"].as<double>();
@@ -38,7 +38,7 @@ namespace cam_lidar_calib {
 
 
         // DATA
-        std::cout << "data section " << std::endl;
+        // std::cout << "data section " << std::endl;
         YAML::Node data = root["data"];
 
         cfg.imagesDir = data["images_dir"].as<std::string>();

@@ -8,52 +8,53 @@
 namespace cam_lidar_calib {
 
     CameraDetector::CameraDetector(const CalibrationConfig& config, 
-                                            const CameraIntrinsics& intrinsics) {
+                                    const CameraIntrinsics& intrinsics) 
+    {
 
                                         
 
-                config_ = config;
-                intrinsics_ = intrinsics;
+        config_ = config;
+        intrinsics_ = intrinsics;
 
-                board_size_ = cv::Size(config.cols, config.rows);
-                square_size_ = config.square;
+        board_size_ = cv::Size(config.cols, config.rows);
+        square_size_ = config.square;
 
-                object_points_.clear();
+        object_points_.clear();
 
 
-                for (int rows = 0; rows < board_size_.height; ++rows) {
+        for (int rows = 0; rows < board_size_.height; ++rows) {
 
-                    for (int cols = 0; cols < board_size_.width; ++cols) {
+            for (int cols = 0; cols < board_size_.width; ++cols) {
 
-                        cv::Point3f point(
-                            static_cast<float>(cols) * square_size_,
-                            static_cast<float>(rows) * square_size_,
-                            0.0f
-                        );
+                cv::Point3f point(
+                    static_cast<float>(cols) * square_size_,
+                    static_cast<float>(rows) * square_size_,
+                    0.0f
+                );
 
-                        object_points_.push_back(point);
+                object_points_.push_back(point);
 
-                    }
-                }
+            }
+        }
 
-                camera_matrix_ = cv::Mat(3, 3, CV_64F);
+        camera_matrix_ = cv::Mat(3, 3, CV_64F);
 
-                for (int i = 0; i < 3; ++i) {
+        for (int i = 0; i < 3; ++i) {
 
-                    for (int j = 0; j <3; ++j) {
+            for (int j = 0; j <3; ++j) {
 
-                        camera_matrix_.at<double>(i, j) = intrinsics_.K(i, j);
-                    }
-                }
+                camera_matrix_.at<double>(i, j) = intrinsics_.K(i, j);
+            }
+        }
 
-                const int n = static_cast<int>(intrinsics_.distortionCoeffs.size());
+        const int n = static_cast<int>(intrinsics_.distortionCoeffs.size());
 
-                dist_coeffs_= cv::Mat::zeros(1, n, CV_64F);
+        dist_coeffs_= cv::Mat::zeros(1, n, CV_64F);
 
-                for (int i = 0; i < n; ++i) {
+        for (int i = 0; i < n; ++i) {
 
-                    dist_coeffs_.at<double>(0, i) = intrinsics_.distortionCoeffs(i);
-                }
+            dist_coeffs_.at<double>(0, i) = intrinsics_.distortionCoeffs(i);
+        }
     }
 
     cv::Mat CameraDetector::drawDetection(const cv::Mat& image, 
@@ -64,7 +65,7 @@ namespace cam_lidar_calib {
 
                         if (output.channels() == 1) {
                             
-                            cv::cvtColor(output, output, cv::COLOR_BGR2GRAY);
+                            cv::cvtColor(output, output, cv::COLOR_GRAY2BGR);
                         }
 
                     if (!corners.empty() && corners.size() == static_cast<size_t>(board_size_.area())) {
@@ -76,7 +77,8 @@ namespace cam_lidar_calib {
     }
 
 
-    std::optional<cam_lidar_calib::PlaneObservation> CameraDetector::detect(const cv::Mat& image, int frame_index) {
+    std::optional<cam_lidar_calib::PlaneObservation> CameraDetector::detect(const cv::Mat& image, int frame_index) 
+    {
 
         if (image.empty()) {
             return std::nullopt;
@@ -104,10 +106,7 @@ namespace cam_lidar_calib {
         }
 
         // Refine corner locations (strongly recommended)
-        cv::TermCriteria criteria(
-            cv::TermCriteria::EPS + cv::TermCriteria::MAX_ITER,
-            30, 0.001
-        );
+        cv::TermCriteria criteria(cv::TermCriteria::EPS + cv::TermCriteria::MAX_ITER, 30, 0.001);
         cv::cornerSubPix(gray, image_points,
                         cv::Size(11,11), cv::Size(-1,-1),
                         criteria);
@@ -141,11 +140,26 @@ namespace cam_lidar_calib {
             distance = -distance;
         }
 
+        std::vector<Eigen::Vector3d> board_corners_cam;
+        board_corners_cam.reserve(object_points_.size());
+
+        Eigen::Matrix3d R_board;
+        for (int i = 0; i < 3; ++i)
+            for (int j = 0; j < 3; ++j)
+                R_board(i, j) = rotation_matrix.at<double>(i, j);
+
+        for (const auto& pt : object_points_)
+        {
+            Eigen::Vector3d p_board(pt.x, pt.y, pt.z);
+            Eigen::Vector3d p_cam = R_board * p_board + tvec_eigen;
+            board_corners_cam.push_back(p_cam);
+        }
+
         cam_lidar_calib::PlaneObservation obs(
             normal,
             distance,
             cam_lidar_calib::SensorType::CAMERA,
-            {},                     // points — fill later if needed
+            board_corners_cam,                     // points — fill later if needed
             frame_index
         );
         
