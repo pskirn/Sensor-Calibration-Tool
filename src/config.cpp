@@ -3,23 +3,33 @@
 
 namespace cam_lidar_calib {
 
+    CameraIntrinsics CameraIntrinsics::fromYaml(const std::string& path)
+        {
+            CameraIntrinsics intrinsics;
+            YAML::Node root = YAML::LoadFile(path);
+
+            intrinsics.width = root["image_width"].as<int>();
+            intrinsics.height = root["image_height"].as<int();
+
+            auto K_data = root["camera_matrix"]["data"].as<std::vector<double>>();
+            intrinsics.K = Eigen::Matrix3d::Identity();
+            for (int i = 0; i < 3; ++i)
+                for (int j = 0; j < 3; ++j)
+                    intrinsics.K(i, j) = K_data[i * 3 + j];
+
+
+            auto dist_data = root["distortion_coefficients"]["data"].as<std::vector<double>>();
+            intrinsics.distortionCoeffs = Eigen::VectorXd(dist_data.size());
+
+            for (size_t i = 0; i < dist_data.size(); ++i)
+                intrinsics.distortionCoeffs(i) = dist_data[i];
+
+            
+            return intrinsics;
+        }
+
     CalibrationConfig CalibrationConfig::fromYaml(const std::string& path)
     {
-
-        CalibrationConfig cfg;
-
-        YAML::Node root = YAML::LoadFile(path);
-
-        
-        // CAMERA
-        // std::cout << "camera section " << std::endl;
-        YAML::Node cam = root["camera"];
-
-        cfg.cameraIntrinsicsPath = cam["intrinsics_file"].as<std::string>();
-        cfg.rows = cam["board_rows"].as<int>();
-        cfg.cols = cam["board_cols"].as<int>();
-        cfg.square = cam["square_size"].as<double>();
-        
 
         // LIDAR
         // std::cout << "lidar section " << std::endl;
@@ -41,8 +51,10 @@ namespace cam_lidar_calib {
         // std::cout << "data section " << std::endl;
         YAML::Node data = root["data"];
 
-        cfg.imagesDir = data["images_dir"].as<std::string>();
+        // cfg.imagesDir = data["images_dir"].as<std::string>();
         cfg.pointcloudsDir = data["pointclouds_dir"].as<std::string>();
+
+        
 
 
         // OUTPUT

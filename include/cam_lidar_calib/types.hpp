@@ -85,7 +85,7 @@ namespace cam_lidar_calib {
         bool isValid() const {
 
             return (camera_obs.normal.norm() > 0.99  && lidar_obs.normal.norm() > 0.99
-                        && camera_obs.distance > 0 && lidar_obs.distance > 0)) ;
+                        && camera_obs.distance > 0 && lidar_obs.distance > 0) ;
         };
     };
     

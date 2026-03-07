@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 project(camera_lidar_calibration)
+project(compute_intrinsics)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -25,11 +26,11 @@ add_definitions(${PCL_DEFINITIONS})
 set(SOURCES src/main.cpp)
 
 
-add_executable(${PROJECT_NAME} src/main.cpp src/config.cpp src/camera_detector.cpp)
+add_executable(camera_lidar_calibration src/main.cpp src/config.cpp)
 
 
 target_include_directories(
-    ${PROJECT_NAME}
+    camera_lidar_calibration
     PRIVATE
     include/ 
     ${OpenCV_INCLUDE_DIRS} 
@@ -40,7 +41,7 @@ target_include_directories(
 )
 
 target_link_libraries(
-    ${PROJECT_NAME}
+    camera_lidar_calibration
     PRIVATE
     ${OpenCV_LIBS}
     ${PCL_LIBRARIES}
@@ -50,9 +51,41 @@ target_link_libraries(
 )
 
 target_compile_options(
-    ${PROJECT_NAME}
+    camera_lidar_calibration
     PRIVATE
     -Wall
     -Wextra
     -Wpedantic
 )
+
+add_executable(compute_intrinsics src/camera_intrinsics.cpp src/config.cpp)
+
+target_include_directories(
+    compute_intrinsics
+    PRIVATE
+    include/ 
+    ${OpenCV_INCLUDE_DIRS} 
+    ${PCL_INCLUDE_DIRS}
+    ${EIGEN3_INCLUDE_DIR}
+    # ${EIGEN3_INCLUDE_DIRS}
+
+)
+
+target_link_libraries(
+    compute_intrinsics
+    PRIVATE
+    ${OpenCV_LIBS}
+    ${PCL_LIBRARIES}
+    Eigen3::Eigen
+    Ceres::ceres
+    yaml-cpp
+)
+
+target_compile_options(
+    compute_intrinsics
+    PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+)
+

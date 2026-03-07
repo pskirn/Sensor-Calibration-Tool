@@ -1,7 +1,7 @@
 camera:
   intrinsics_file: "config/camera.yaml"
-  board_rows:  6
-  board_cols:  9
+  board_rows:  11
+  board_cols:  7
   square_size: 0.025
 
 lidar:

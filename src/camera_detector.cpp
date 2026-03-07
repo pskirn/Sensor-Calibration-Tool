@@ -10,9 +10,6 @@ namespace cam_lidar_calib {
     CameraDetector::CameraDetector(const CalibrationConfig& config, 
                                     const CameraIntrinsics& intrinsics) 
     {
-
-                                        
-
         config_ = config;
         intrinsics_ = intrinsics;
 
