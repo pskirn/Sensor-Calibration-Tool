@@ -26,7 +26,7 @@ add_definitions(${PCL_DEFINITIONS})
 set(SOURCES src/main.cpp)
 
 
-add_executable(camera_lidar_calibration src/main.cpp src/config.cpp)
+add_executable(camera_lidar_calibration src/main.cpp src/config.cpp src/camera_detector.cpp)
 
 
 target_include_directories(
@@ -58,15 +58,13 @@ target_compile_options(
     -Wpedantic
 )
 
-add_executable(compute_intrinsics src/camera_intrinsics.cpp src/config.cpp)
+add_executable(compute_intrinsics src/camera_intrinsics.cpp)
 
 target_include_directories(
     compute_intrinsics
     PRIVATE
     include/ 
     ${OpenCV_INCLUDE_DIRS} 
-    ${PCL_INCLUDE_DIRS}
-    ${EIGEN3_INCLUDE_DIR}
     # ${EIGEN3_INCLUDE_DIRS}
 
 )
@@ -75,10 +73,6 @@ target_link_libraries(
     compute_intrinsics
     PRIVATE
     ${OpenCV_LIBS}
-    ${PCL_LIBRARIES}
-    Eigen3::Eigen
-    Ceres::ceres
-    yaml-cpp
 )
 
 target_compile_options(

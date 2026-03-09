@@ -9,7 +9,7 @@ namespace cam_lidar_calib {
             YAML::Node root = YAML::LoadFile(path);
 
             intrinsics.width = root["image_width"].as<int>();
-            intrinsics.height = root["image_height"].as<int();
+            intrinsics.height = root["image_height"].as<int>();
 
             auto K_data = root["camera_matrix"]["data"].as<std::vector<double>>();
             intrinsics.K = Eigen::Matrix3d::Identity();
@@ -31,27 +31,37 @@ namespace cam_lidar_calib {
     CalibrationConfig CalibrationConfig::fromYaml(const std::string& path)
     {
 
-        // LIDAR
-        // std::cout << "lidar section " << std::endl;
-        YAML::Node lid = root["lidar"];
+        CalibrationConfig cfg;
+        YAML::Node root = YAML::LoadFile(path);
 
-        cfg.x_min = lid["roi_min"]["x"].as<double>();
-        cfg.y_min = lid["roi_min"]["y"].as<double>();
-        cfg.z_min = lid["roi_min"]["z"].as<double>();
+        // Camera section
+        YAML::Node cam = root["camera"];
+        cfg.cameraIntrinsicsPath = cam["intrinsics_file"].as<std::string>();
+        cfg.rows = cam["board_rows"].as<int>();
+        cfg.cols = cam["board_cols"].as<int>();
+        cfg.square = cam["square_size"].as<double>();
 
-        cfg.x_max = lid["roi_max"]["x"].as<double>();
-        cfg.y_max = lid["roi_max"]["y"].as<double>();
-        cfg.z_max = lid["roi_max"]["z"].as<double>();
+    //     // LIDAR section
+    //     // std::cout << "lidar section " << std::endl;
+    //     YAML::Node lid = root["lidar"];
 
-        cfg.ransacThreshold = lid["ransac_threshold"].as<double>();
-        cfg.ransacMaxIterations = lid["ransac_max_iterations"].as<int>();
+    //     cfg.x_min = lid["roi_min"]["x"].as<double>();
+    //     cfg.y_min = lid["roi_min"]["y"].as<double>();
+    //     cfg.z_min = lid["roi_min"]["z"].as<double>();
+
+    //     cfg.x_max = lid["roi_max"]["x"].as<double>();
+    //     cfg.y_max = lid["roi_max"]["y"].as<double>();
+    //     cfg.z_max = lid["roi_max"]["z"].as<double>();
+
+    //     cfg.ransacThreshold = lid["ransac_threshold"].as<double>();
+    //     cfg.ransacMaxIterations = lid["ransac_max_iterations"].as<int>();
 
 
-        // DATA
+        // Data Section
         // std::cout << "data section " << std::endl;
         YAML::Node data = root["data"];
 
-        // cfg.imagesDir = data["images_dir"].as<std::string>();
+        cfg.imagesDir = data["images_dir"].as<std::string>();
         cfg.pointcloudsDir = data["pointclouds_dir"].as<std::string>();
 
         

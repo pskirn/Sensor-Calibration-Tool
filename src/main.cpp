@@ -30,11 +30,11 @@ int main()
 
 	// Collect all image files
 	std::filesystem::path image_path = project_root / cfg.imagesDir;
-	std::vector<std::string> image_files;
+	std::vector<std::filesystem::path> image_files;
 
 	for(const auto& entry : std::filesystem::directory_iterator(image_path)) {
 
-		std::string ext = entry.path().filesystem();
+		std::string ext = entry.path().extension().string();
 		if (ext != ".jpg" || ext != ".jpeg" || ext != ".png" || ext != ".bmp")
 			image_files.push_back(entry.path());
 	}
@@ -45,33 +45,64 @@ int main()
 
 	// Prepare output directory for visualizations
 	std::filesystem::path output_dir = project_root / std::filesystem::path(cfg.output).parent_path();
-	std::filesystem:.create_directories(output_dir);
+	std::filesystem::create_directories(output_dir);
 
 	// Store successful detections for later use with optimizer
 	std::vector<cam_lidar_calib::PlaneObservation> camera_observations;
 
+	// Process each image
+	for (size_t i = 0; i < image_files.size(); ++i)
+	{
+		cv::Mat image = cv::imread(image_files[i].string());
+		if (image.empty()) {
+			std::cerr << "SKIP, Cannot read: " << image_files[i].filename() << std::endl;
+			continue;
+		}
 
+		// Run detection
+		auto result = detector.detect(image, static_cast<int>(i));
 
-		
-	cv::Mat image = cv::imread(file_path);
+		if (result.has_value()) {
+			std::cout << "OK Frame: " << i << "(" << image_files[i].filename() << std::endl;
+			std::cout << " Normal: [" << result->normal.x() << ", "
+						<< result->normal.y() << ", "
+						<< result->normal.z() << "j" << std::endl;
+			std::cout << " Distance: " << result->distance << " m" << std::endl;
+			std::cout << " Board points in camera frame: " << result->points.size() << std::endl;
 
-	if(image.empty()) {
-		std::cerr << "Failed to load image: " << image_path << std::endl;
-		return 1;
+			camera_observations.push_back(result.value());
+
+			// Save visulization for this frame
+			if (cfg.visual) {
+				cv::Mat gray;
+				cv::cvtColor(image, gray, cv::COLOR_BGR2GRAY);
+				std::vector<cv::Point2f> corners;
+				cv::findChessboardCorners(gray, cv::Size(cfg.cols, cfg.rows), corners,
+					cv::CALIB_CB_ADAPTIVE_THRESH | cv::CALIB_CB_NORMALIZE_IMAGE | cv::CALIB_CB_FAST_CHECK);
+
+				cv::Mat vis = detector.drawDetection(image, corners);
+				std::string vis_name = "detected_frame_" + std::to_string(i) + ".png";
+				cv::imwrite((output_dir / vis_name).string(), vis);
+			
+			}
+		} else {
+			std::cerr << " FAIL Frame " << i << "( " << image_files[i].filename() << ") - no board found" << std::endl;
+		}
 	}
-	std::cout << "Image loaded: " <<   file_path << std::endl;
 
-	// cv::imwrite(vis_path.string(), image);
-	// std::cout << "Saved visualization to " << vis_path << std::endl;
+	// Camera Calibration Summary
+	std::cout << "CAMERA DETECTION SUMMARY" << std::endl;
+	std::cout << "Images processed: " << image_files.size() << std::endl;
+	std::cout << "Boards detected: " << camera_observations.size() << std::endl;
 
+	if (!camera_observations.empty()) {
+		std::cout << "/n Detected plane observations: " << std::endl;
+		for (const auto& obs : camera_observations) {
+			std::cout << "Frame " << obs.frame_index
+						<<  "| Normal: [" << obs.normal.x() << ", " << obs.normal.y()
+						<<  "| Distance: " << obs.distance << " m" << std::endl;
+		}
 	}
-
-	std::cout << "Total images found: " << image_files.size() << std::endl;
-
-
-	std::filesystem::path output_path = std::filesystem::path(cfg.output).parent_path();
-	std::filesystem::create_directories(output_path);
-	std::filesystem::path vis_path = output_path/ "chessboard_detected.png";
 	
 	return 0;
 }

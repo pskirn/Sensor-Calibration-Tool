@@ -6,8 +6,6 @@
 namespace fs = std::filesystem;
 
 
-namespace cam_lidar_calib {
-
 //  Create 3D object points in board's own coordinate frame
 std::vector<cv::Point3f> generateObjectPoints(cv::Size board_size, float square_size) 
 {
@@ -20,8 +18,6 @@ std::vector<cv::Point3f> generateObjectPoints(cv::Size board_size, float square_
 
     }
 
-}
-
 
 int main(int argc, char** argv) 
 {
@@ -32,14 +28,17 @@ int main(int argc, char** argv)
     }
 
     std::string images_folder = argv[1]; 
-    int board_cols = std::stoi(argc[2]);      // inner corners columns
-    int board_rows = std::stoi(argc[3]);      // inner corners rows
-    float square_size = std::stof(arg[4]);    // in meters
+    int board_cols = std::stoi(argv[2]);      // inner corners columns
+    int board_rows = std::stoi(argv[3]);      // inner corners rows
+    float square_size = std::stof(argv[4]);    // in meters
 
     cv::Size board_size(board_cols, board_rows);
 
     std::vector<std::vector<cv::Point2f>> image_points; // 2D corners
     std::vector<std::vector<cv::Point3f>> object_points; // 3D corners
+
+    // 3D points are same for every image
+    std::vector<cv::Point3f> objp = generateObjectPoints(board_size, square_size);
 
     cv::Size img_size;          // will be set from first valid image
     int images_processed = 0;
@@ -97,7 +96,7 @@ int main(int argc, char** argv)
     cv::Mat camera_matrix, dist_coeffs;
     std::vector<cv::Mat> rvecs, tvecs;
 
-    cv::Size img_size = cv::imread(std::filesystem::directory_iterator(images_folder)->path().string()).size();
+    // img_size = cv::imread(std::filesystem::directory_iterator(images_folder)->path().string()).size();
 
     double rms_error = cv::calibrateCamera(
         object_points,
@@ -118,8 +117,6 @@ int main(int argc, char** argv)
     std::cout << "  fy = " << camera_matrix.at<double>(1, 1) << std::endl;
     std::cout << "  cx = " << camera_matrix.at<double>(0, 2) << std::endl;
     std::cout << "  cy = " << camera_matrix.at<double>(1, 2) << std::endl;
-
-    std::cout << "RMS Reprojection Error: " << rms_error << std::endl;
 
     if (rms_error > 1.0)
         std::cout << "  WARNING: High error. Add more diverse images." << std::endl;
