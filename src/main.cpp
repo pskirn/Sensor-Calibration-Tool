@@ -25,9 +25,9 @@ int main()
               << " cx=" << intrinsics.K(0,2) 
               << " cy=" << intrinsics.K(1,2) << std::endl;
 
-	// Create the detector
+	// Create the detectors
 	cam_lidar_calib::CameraDetector detector(cfg, intrinsics);
-	cam_lidar_calib::LidarDetector detector(cfg);
+	cam_lidar_calib::LidarDetector lidar_detector(cfg);
 
 	// Collect all image files
 	std::filesystem::path image_path = project_root / cfg.imagesDir;
@@ -40,14 +40,14 @@ int main()
 	for(const auto& entry : std::filesystem::directory_iterator(image_path)) {
 
 		std::string ext = entry.path().extension().string();
-		if (ext != ".jpg" || ext != ".jpeg" || ext != ".png" || ext != ".bmp")
+		if (ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".bmp")
 			image_files.push_back(entry.path());
 	}
 
 	for (const auto& entry : std::filesystem::directory_iterator(point_cloud_path)) {
 
 		std::string ext = entry.path().extension().string();
-		if (ext != ".pcd")
+		if (ext == ".pcd")
 			point_cloud_files.push_back(entry.path());
 	}
 
@@ -108,16 +108,12 @@ int main()
 	// Process each point cloud file
 	for (size_t i = 0; i < point_cloud_files.size(); ++i)
 	{
-		pcl::PointCloud<pcl::PointXYZI>::Ptr cloud 
-
-
-		// Run detections
-		auto result = detector.detect(cloud, static_cast<int>(i));
+		auto result = lidar_detector.detectFromFile(point_cloud_files[i].string(), static_cast<int>(i));
 		if (result.has_value()) {
 			std::cout << "OK plane: " << i << "(" << point_cloud_files[i].filename() << std::endl;
 			std::cout << "Normal. [" << result->normal.x() << ", "
-									<< result.normal.y() << ", "
-									<< result.normal.z() << "]" << std::endl;
+									<< result->normal.y() << ", "
+									<< result->normal.z() << "]" << std::endl;
 			std::cout << "Distance: " << result->distance << "m" << std::endl;
 			std::cout << "Board points in Lidar frame: " << result->points.size() << std::endl;
 

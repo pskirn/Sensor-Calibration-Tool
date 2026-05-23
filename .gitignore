@@ -8,3 +8,6 @@ build/
 *.out
 *.bin
 data/extrinsicdataset/
+
+# Claude Code instructions (local only)
+CLAUDE.md
