@@ -152,15 +152,15 @@ namespace cam_lidar_calib {
             board_corners_cam.push_back(p_cam);
         }
 
-        cam_lidar_calib::PlaneObservation obs(
+        cam_lidar_calib::PlaneObservation observations(
             normal,
             distance,
-            cam_lidar_calib::SensorType::CAMERA,
+            SensorType::CAMERA,
             board_corners_cam,                     // points — fill later if needed
             frame_index
         );
         
-        return obs;
+        return observations;
     }
 
 }

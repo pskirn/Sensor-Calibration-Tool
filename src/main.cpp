@@ -27,10 +27,15 @@ int main()
 
 	// Create the detector
 	cam_lidar_calib::CameraDetector detector(cfg, intrinsics);
+	cam_lidar_calib::LidarDetector detector(cfg);
 
 	// Collect all image files
 	std::filesystem::path image_path = project_root / cfg.imagesDir;
 	std::vector<std::filesystem::path> image_files;
+
+	// Collect all pointcloud files
+	std::filesystem::path point_cloud_path = project_root / cfg.pointcloudsDir;
+	std::vector<std::filesystem::path> point_cloud_files;
 
 	for(const auto& entry : std::filesystem::directory_iterator(image_path)) {
 
@@ -39,9 +44,18 @@ int main()
 			image_files.push_back(entry.path());
 	}
 
+	for (const auto& entry : std::filesystem::directory_iterator(point_cloud_path)) {
+
+		std::string ext = entry.path().extension().string();
+		if (ext != ".pcd")
+			point_cloud_files.push_back(entry.path());
+	}
+
 	std::sort(image_files.begin(), image_files.end());
+	std::sort(point_cloud_files.begin(), point_cloud_files.end());
 
 	std::cout << "Found " << image_files.size() << "images in " << image_path << std::endl;
+	std::cout << "Found " << point_cloud_files.size() << "point clouds in " << point_cloud_path << std::endl;
 
 	// Prepare output directory for visualizations
 	std::filesystem::path output_dir = project_root / std::filesystem::path(cfg.output).parent_path();
@@ -49,6 +63,7 @@ int main()
 
 	// Store successful detections for later use with optimizer
 	std::vector<cam_lidar_calib::PlaneObservation> camera_observations;
+	std::vector<cam_lidar_calib::PlaneObservation> lidar_observations;
 
 	// Process each image
 	for (size_t i = 0; i < image_files.size(); ++i)
@@ -66,13 +81,13 @@ int main()
 			std::cout << "OK Frame: " << i << "(" << image_files[i].filename() << std::endl;
 			std::cout << " Normal: [" << result->normal.x() << ", "
 						<< result->normal.y() << ", "
-						<< result->normal.z() << "j" << std::endl;
+						<< result->normal.z() << "]" << std::endl;
 			std::cout << " Distance: " << result->distance << " m" << std::endl;
 			std::cout << " Board points in camera frame: " << result->points.size() << std::endl;
 
 			camera_observations.push_back(result.value());
 
-			// Save visulization for this frame
+			// Save visualization for this frame
 			if (cfg.visual) {
 				cv::Mat gray;
 				cv::cvtColor(image, gray, cv::COLOR_BGR2GRAY);
@@ -90,6 +105,35 @@ int main()
 		}
 	}
 
+	// Process each point cloud file
+	for (size_t i = 0; i < point_cloud_files.size(); ++i)
+	{
+		pcl::PointCloud<pcl::PointXYZI>::Ptr cloud 
+
+
+		// Run detections
+		auto result = detector.detect(cloud, static_cast<int>(i));
+		if (result.has_value()) {
+			std::cout << "OK plane: " << i << "(" << point_cloud_files[i].filename() << std::endl;
+			std::cout << "Normal. [" << result->normal.x() << ", "
+									<< result.normal.y() << ", "
+									<< result.normal.z() << "]" << std::endl;
+			std::cout << "Distance: " << result->distance << "m" << std::endl;
+			std::cout << "Board points in Lidar frame: " << result->points.size() << std::endl;
+
+
+			lidar_observations.push_back(result.value());
+
+			// Save visualizations for this frame
+			if (cfg.visual) {
+
+			}
+
+		} else {
+			std::cerr << "FAIL Plane " << i << "( " << point_cloud_files[i].filename() << ") - no board found" << std::endl;
+		}
+	}
+
 	// Camera Calibration Summary
 	std::cout << "CAMERA DETECTION SUMMARY" << std::endl;
 	std::cout << "Images processed: " << image_files.size() << std::endl;
@@ -101,6 +145,20 @@ int main()
 			std::cout << "Frame " << obs.frame_index
 						<<  "| Normal: [" << obs.normal.x() << ", " << obs.normal.y()
 						<<  "| Distance: " << obs.distance << " m" << std::endl;
+		}
+	}
+
+	// Lidar Calibration Summary
+	std::cout << "LIDAR DETECTION SUMMARY " << std::endl;
+	std::cout << "Points processed: " << point_cloud_files.size() << std::endl;
+	std::cout << "Boards detected: " << lidar_observations.size() << std::endl;
+
+	if (!lidar_observations.empty()) {
+		std::cout << "/n Detected plane observations: " << std::endl;
+		for (const auto& obs: lidar_observations) {
+			std::cout << "Plane " << obs.frame_index
+						<< "| Normal: [" << obs.normal.x() << ", " << obs.normal.y()
+						<< "| Distance: " << obs.distance << " m" << std::endl;
 		}
 	}
 	

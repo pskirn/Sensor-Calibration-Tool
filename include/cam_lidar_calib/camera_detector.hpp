@@ -17,11 +17,11 @@ namespace cam_lidar_calib {
     class CameraDetector {
 
         public:
-            CameraDetector(const cam_lidar_calib::CalibrationConfig& config, 
-                            const cam_lidar_calib::CameraIntrinsics& intrinsics);
+            CameraDetector(const CalibrationConfig& config, 
+                            const CameraIntrinsics& intrinsics);
 
             
-            std::optional<cam_lidar_calib::PlaneObservation> detect(const cv::Mat& image, int frame_index);
+            std::optional<PlaneObservation> detect(const cv::Mat& image, int frame_index);
 
 
             cv::Mat drawDetection(const cv::Mat& image, 
@@ -31,8 +31,8 @@ namespace cam_lidar_calib {
 
         private:
             // Stored input configurations 
-            cam_lidar_calib::CalibrationConfig config_;
-            cam_lidar_calib::CameraIntrinsics intrinsics_;
+            CalibrationConfig config_;
+            CameraIntrinsics intrinsics_;
 
             // OpenCV-format versions
             cv::Mat camera_matrix_;

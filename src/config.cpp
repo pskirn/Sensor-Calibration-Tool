@@ -41,20 +41,20 @@ namespace cam_lidar_calib {
         cfg.cols = cam["board_cols"].as<int>();
         cfg.square = cam["square_size"].as<double>();
 
-    //     // LIDAR section
-    //     // std::cout << "lidar section " << std::endl;
-    //     YAML::Node lid = root["lidar"];
+        // LIDAR section
+        // std::cout << "lidar section " << std::endl;
+        YAML::Node lid = root["lidar"];
 
-    //     cfg.x_min = lid["roi_min"]["x"].as<double>();
-    //     cfg.y_min = lid["roi_min"]["y"].as<double>();
-    //     cfg.z_min = lid["roi_min"]["z"].as<double>();
+        cfg.x_min = lid["roi_min"]["x"].as<double>();
+        cfg.y_min = lid["roi_min"]["y"].as<double>();
+        cfg.z_min = lid["roi_min"]["z"].as<double>();
 
-    //     cfg.x_max = lid["roi_max"]["x"].as<double>();
-    //     cfg.y_max = lid["roi_max"]["y"].as<double>();
-    //     cfg.z_max = lid["roi_max"]["z"].as<double>();
+        cfg.x_max = lid["roi_max"]["x"].as<double>();
+        cfg.y_max = lid["roi_max"]["y"].as<double>();
+        cfg.z_max = lid["roi_max"]["z"].as<double>();
 
-    //     cfg.ransacThreshold = lid["ransac_threshold"].as<double>();
-    //     cfg.ransacMaxIterations = lid["ransac_max_iterations"].as<int>();
+        cfg.ransacThreshold = lid["ransac_threshold"].as<double>();
+        cfg.ransacMaxIterations = lid["ransac_max_iterations"].as<int>();
 
 
         // Data Section

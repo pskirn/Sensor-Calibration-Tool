@@ -12,7 +12,6 @@
 #include <pcl-1.12/pcl/sample_consensus/ransac.h>
 #include <pcl-1.12/pcl/sample_consensus/sac_model_plane.h>
 #include <pcl-1.12/pcl/segmentation/sac_segmentation.h>
-#include <pcl-1.12/pcl/visualization/pcl_visualizer.h>
 
 using namespace std::chrono_literals;
 
@@ -29,7 +28,6 @@ namespace cam_lidar_calib
         auto cloud_filtered = pcl::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
         auto final = pcl::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
 
-        auto viewer = std::make_shared<pcl::visualization::PCLVisualizer>("Viewer");
 
         if (pcl::io::loadPCDFile<pcl::PointXYZI> ("data.pcd", *cloud) == -1)
         {
@@ -98,18 +96,9 @@ namespace cam_lidar_calib
         // copies all inliers of the model computed to another PointCloud
         pcl::copyPointCloud (*cloud_filtered, inliers, *final);
 
-        // create the visulaization object and adds for both of our original cloud and all inliers cloud
-        viewer->addPointCloud<pcl::PointXYZI>(cloud, "cloud");
-        viewer->addPointCloud<pcl::PointXYZI>(final, "final");
-
-        while (!viewer->wasStopped ())
-        {
-            viewer->spinOnce (100);
-            std::this_thread::sleep_for(100ms);
-        }
     }
 
-    std::optional<cam_lidar_calib::PlaneObservation> extractPlane(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered, int frame_index, const CalibrationConfig& config)
+    std::optional<cam_lidar_calib::PlaneObservation> LidarDetector::detect(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered, int frame_index)
     {
         pcl::SACSegmentation<pcl::PointXYZI> seg;
         seg.setModelType(pcl::SACMODEL_PLANE);
@@ -154,7 +143,7 @@ namespace cam_lidar_calib
         }
 
         // Build result
-        cam_lidar_calib::PlaneObservation lidar_obs(
+        cam_lidar_calib::PlaneObservation lidar_observations(
             normal,
             distance,
             SensorType::LIDAR,
@@ -162,7 +151,7 @@ namespace cam_lidar_calib
             frame_index
         );
        
-        return lidar_obs;
+        return lidar_observations;
 
 
     }

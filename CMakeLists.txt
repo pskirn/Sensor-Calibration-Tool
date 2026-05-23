@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(OpenCV REQUIRED)
-find_package(PCL 1.12 REQUIRED COMPONENTS common io filters segmentation sample_consensus)
+find_package(PCL 1.12 REQUIRED COMPONENTS common io filters segmentation sample_consensus visualization)
 find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 find_package(Ceres REQUIRED)
 find_package(yaml-cpp REQUIRED)

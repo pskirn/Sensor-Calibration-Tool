@@ -80,12 +80,12 @@ namespace cam_lidar_calib {
     struct PlanePair
     {
         
-        PlaneObservation camera_obs, lidar_obs;
+        PlaneObservation camera_observations, lidar_observations;
 
         bool isValid() const {
 
-            return (camera_obs.normal.norm() > 0.99  && lidar_obs.normal.norm() > 0.99
-                        && camera_obs.distance > 0 && lidar_obs.distance > 0) ;
+            return (camera_observations.normal.norm() > 0.99  && lidar_observations.normal.norm() > 0.99
+                        && camera_observations.distance > 0 && lidar_observations.distance > 0) ;
         };
     };
     
