@@ -16,3 +16,6 @@ results/detected_frame_*.png
 
 # Claude Code instructions (local only)
 CLAUDE.md
+
+# Personal theory notes (local only)
+theory.md

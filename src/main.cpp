@@ -20,22 +20,34 @@ int main()
 
 	std::filesystem::path project_root = std::filesystem::current_path().parent_path();
 
-	// Helper: write a CalibrationResult to YAML.
+	// Helper: write a CalibrationResult to YAML in both conventions
+	// (lidar->camera, the solved direction; and camera->lidar, the inverse).
 	auto writeResultYaml = [&](const cam_lidar_calib::CalibrationResult& result) {
 		std::filesystem::path out_path = project_root / cfg.output;
 		std::filesystem::create_directories(out_path.parent_path());
 		std::ofstream out(out_path);
-		Eigen::Quaterniond q = result.getQuaternion();
-		Eigen::Vector3d rpy = result.R.eulerAngles(0, 1, 2);
-		out << "# Camera-LiDAR extrinsic: p_camera = R * p_lidar + t\n";
+
+		auto dumpBlock = [&out](const std::string& label, const std::string& eqn,
+		                       const Eigen::Matrix3d& R, const Eigen::Vector3d& t) {
+			Eigen::Quaterniond q(R);
+			Eigen::Vector3d rpy = R.eulerAngles(0, 1, 2);
+			out << label << ":\n";
+			out << "  # " << eqn << "\n";
+			out << "  translation_m: [" << t.x() << ", " << t.y() << ", " << t.z() << "]\n";
+			out << "  rotation_rpy_rad: [" << rpy.x() << ", " << rpy.y() << ", " << rpy.z() << "]\n";
+			out << "  quaternion_xyzw: [" << q.x() << ", " << q.y() << ", " << q.z() << ", " << q.w() << "]\n";
+			out << "  rotation_matrix:\n";
+			for (int i = 0; i < 3; ++i)
+				out << "    - [" << R(i,0) << ", " << R(i,1) << ", " << R(i,2) << "]\n";
+		};
+
 		out << "poses_used: " << result.poses << "\n";
 		out << "final_cost: " << result.error << "\n";
-		out << "translation_m: [" << result.t.x() << ", " << result.t.y() << ", " << result.t.z() << "]\n";
-		out << "rotation_rpy_rad: [" << rpy.x() << ", " << rpy.y() << ", " << rpy.z() << "]\n";
-		out << "quaternion_xyzw: [" << q.x() << ", " << q.y() << ", " << q.z() << ", " << q.w() << "]\n";
-		out << "rotation_matrix:\n";
-		for (int i = 0; i < 3; ++i)
-			out << "  - [" << result.R(i,0) << ", " << result.R(i,1) << ", " << result.R(i,2) << "]\n";
+		dumpBlock("lidar_to_camera", "p_camera = R * p_lidar + t", result.R, result.t);
+
+		auto inv = result.inverse();
+		dumpBlock("camera_to_lidar", "p_lidar = R * p_camera + t", inv.R, inv.t);
+
 		std::cout << "Wrote " << out_path << std::endl;
 	};
 
