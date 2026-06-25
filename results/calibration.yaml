@@ -1,0 +1,10 @@
+# Camera-LiDAR extrinsic: p_camera = R * p_lidar + t
+poses_used: 40
+final_cost: 0.019425
+translation_m: [0.0102541, -0.176766, -0.08565]
+rotation_rpy_rad: [1.69309, 0.0238402, 1.49762]
+quaternion_xyzw: [0.553978, -0.504069, 0.457566, 0.479224]
+rotation_matrix:
+  - [0.0730951, -0.99704, 0.0238379]
+  - [-0.119933, -0.0325159, -0.992249]
+  - [0.990087, 0.0696696, -0.121955]

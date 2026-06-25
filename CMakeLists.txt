@@ -26,7 +26,7 @@ add_definitions(${PCL_DEFINITIONS})
 set(SOURCES src/main.cpp)
 
 
-add_executable(camera_lidar_calibration src/main.cpp src/config.cpp src/camera_detector.cpp)
+add_executable(camera_lidar_calibration src/main.cpp src/config.cpp src/camera_detector.cpp src/lidar_detector.cpp src/poses_csv_loader.cpp src/optimizer.cpp)
 
 
 target_include_directories(
