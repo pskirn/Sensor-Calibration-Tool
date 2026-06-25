@@ -150,6 +150,7 @@ namespace cam_lidar_calib {
         std::string cameraIntrinsicsPath;
         std::string imagesDir;
         std::string pointcloudsDir;
+        std::string posesCsv;
 
         double x_min, y_min, z_min, x_max, y_max, z_max;
 

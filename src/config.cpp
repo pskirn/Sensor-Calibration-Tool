@@ -63,6 +63,8 @@ namespace cam_lidar_calib {
 
         cfg.imagesDir = data["images_dir"].as<std::string>();
         cfg.pointcloudsDir = data["pointclouds_dir"].as<std::string>();
+        if (data["poses_csv"])
+            cfg.posesCsv = data["poses_csv"].as<std::string>();
 
         
 

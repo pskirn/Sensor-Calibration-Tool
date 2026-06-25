@@ -8,3 +8,11 @@ build/
 *.out
 *.bin
 data/extrinsicdataset/
+
+# Large datasets and derived data (download separately, see README)
+data/pointclouds/
+data/vlp/
+results/detected_frame_*.png
+
+# Claude Code instructions (local only)
+CLAUDE.md
