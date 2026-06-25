@@ -6,51 +6,96 @@
   <title>Camera-LiDAR Calibration</title>
   <link rel="stylesheet" href="/style.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
 </head>
 <body>
   <header>
     <h1>Camera-LiDAR Calibration</h1>
-    <p class="tagline">Extrinsic calibration via plane-based Ceres optimization</p>
+    <p class="tagline">Drop a dataset, see the input, run the optimizer, verify the fit visually.</p>
   </header>
 
   <main>
-    <section class="controls">
-      <button id="run-btn">Run Calibration</button>
-      <span id="status" class="status idle">Ready</span>
-    </section>
-
-    <section id="summary" class="card hidden">
-      <h2>Summary</h2>
-      <dl class="summary-grid">
-        <dt>Poses used</dt><dd id="s-poses">—</dd>
-        <dt>Final cost</dt><dd id="s-cost">—</dd>
-        <dt>Mean residual</dt><dd id="s-mean">—</dd>
-        <dt>Max residual</dt><dd id="s-max">—</dd>
-      </dl>
-    </section>
-
-    <section id="conventions" class="cards-row hidden">
-      <div class="card">
-        <h2>LiDAR → Camera <small>(solved)</small></h2>
-        <pre id="conv-l2c"></pre>
+    <!-- 1. DATASET ----------------------------------------------------- -->
+    <section class="card">
+      <h2>1. Dataset</h2>
+      <div class="dataset-row">
+        <label>Select:
+          <select id="dataset-select"></select>
+        </label>
+        <button id="refresh-datasets" class="btn-secondary" title="Re-scan data/ folder">⟳</button>
+        <span id="dataset-info" class="muted"></span>
       </div>
-      <div class="card">
-        <h2>Camera → LiDAR <small>(inverse)</small></h2>
-        <pre id="conv-c2l"></pre>
+
+      <div id="dropzone" class="dropzone">
+        Drop a <code>poses.csv</code> here, or click to choose a file
+        <input type="file" id="file-input" accept=".csv" hidden />
       </div>
+      <p id="upload-msg" class="muted small"></p>
     </section>
 
-    <section id="chart-card" class="card hidden">
-      <h2>Per-pose residual (m)</h2>
-      <canvas id="residual-chart" height="120"></canvas>
+    <!-- 2. INPUT VIZ --------------------------------------------------- -->
+    <section class="card">
+      <h2>2. Input data</h2>
+      <p class="muted small">
+        Each detected board plane is drawn as an outlined quad with a normal arrow.
+        Camera-frame boards are <span class="legend cam">cyan</span>;
+        LiDAR-frame boards are <span class="legend lid">orange</span>.
+      </p>
+      <div class="view-controls">
+        <label><input type="radio" name="view-mode" value="before" checked /> Before calibration (separate frames)</label>
+        <label><input type="radio" name="view-mode" value="after"  disabled /> After calibration (LiDAR → camera overlay) <span id="after-hint" class="muted small">— run calibration first</span></label>
+      </div>
+      <div id="viewer-container" class="viewer"></div>
     </section>
 
-    <section id="logs-card" class="card hidden">
-      <h2>Solver output</h2>
-      <pre id="logs"></pre>
+    <!-- 3. RUN + RESULTS ---------------------------------------------- -->
+    <section class="card">
+      <h2>3. Run calibration</h2>
+      <div class="controls">
+        <button id="run-btn">Run Calibration</button>
+        <span id="status" class="status idle">Ready</span>
+      </div>
+
+      <div id="summary" class="summary-grid-wrap hidden">
+        <h3>Summary</h3>
+        <dl class="summary-grid">
+          <dt>Poses used</dt><dd id="s-poses">—</dd>
+          <dt>Final cost</dt><dd id="s-cost">—</dd>
+          <dt>Mean residual</dt><dd id="s-mean">—</dd>
+          <dt>Max residual</dt><dd id="s-max">—</dd>
+        </dl>
+      </div>
+
+      <div id="conventions" class="cards-row hidden">
+        <div class="sub-card">
+          <h3>LiDAR → Camera <small>(solved)</small></h3>
+          <pre id="conv-l2c"></pre>
+        </div>
+        <div class="sub-card">
+          <h3>Camera → LiDAR <small>(inverse)</small></h3>
+          <pre id="conv-c2l"></pre>
+        </div>
+      </div>
+
+      <div id="chart-card" class="hidden">
+        <h3>Per-pose residual (m)</h3>
+        <canvas id="residual-chart" height="120"></canvas>
+      </div>
+
+      <details id="logs-card" class="hidden">
+        <summary>Solver output</summary>
+        <pre id="logs"></pre>
+      </details>
     </section>
   </main>
 
-  <script src="/main.js"></script>
+  <script type="module" src="/main.js"></script>
 </body>
 </html>

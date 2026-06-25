@@ -24,3 +24,6 @@ theory.md
 ui/.venv/
 ui/__pycache__/
 ui/**/__pycache__/
+
+# UI: user-uploaded datasets stay local
+data/uploads/
