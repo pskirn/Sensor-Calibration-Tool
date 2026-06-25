@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Camera-LiDAR Calibration</title>
+  <link rel="stylesheet" href="/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Camera-LiDAR Calibration</h1>
+    <p class="tagline">Extrinsic calibration via plane-based Ceres optimization</p>
+  </header>
+
+  <main>
+    <section class="controls">
+      <button id="run-btn">Run Calibration</button>
+      <span id="status" class="status idle">Ready</span>
+    </section>
+
+    <section id="summary" class="card hidden">
+      <h2>Summary</h2>
+      <dl class="summary-grid">
+        <dt>Poses used</dt><dd id="s-poses">—</dd>
+        <dt>Final cost</dt><dd id="s-cost">—</dd>
+        <dt>Mean residual</dt><dd id="s-mean">—</dd>
+        <dt>Max residual</dt><dd id="s-max">—</dd>
+      </dl>
+    </section>
+
+    <section id="conventions" class="cards-row hidden">
+      <div class="card">
+        <h2>LiDAR → Camera <small>(solved)</small></h2>
+        <pre id="conv-l2c"></pre>
+      </div>
+      <div class="card">
+        <h2>Camera → LiDAR <small>(inverse)</small></h2>
+        <pre id="conv-c2l"></pre>
+      </div>
+    </section>
+
+    <section id="chart-card" class="card hidden">
+      <h2>Per-pose residual (m)</h2>
+      <canvas id="residual-chart" height="120"></canvas>
+    </section>
+
+    <section id="logs-card" class="card hidden">
+      <h2>Solver output</h2>
+      <pre id="logs"></pre>
+    </section>
+  </main>
+
+  <script src="/main.js"></script>
+</body>
+</html>

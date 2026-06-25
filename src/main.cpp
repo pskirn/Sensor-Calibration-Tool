@@ -43,6 +43,19 @@ int main()
 
 		out << "poses_used: " << result.poses << "\n";
 		out << "final_cost: " << result.error << "\n";
+
+		double sum = 0.0, max_r = 0.0;
+		for (double r : result.residuals) { sum += r; max_r = std::max(max_r, r); }
+		const double mean_r = result.residuals.empty() ? 0.0 : sum / result.residuals.size();
+		out << "mean_residual_m: " << mean_r << "\n";
+		out << "max_residual_m: " << max_r << "\n";
+		out << "per_pose_residuals_m: [";
+		for (size_t i = 0; i < result.residuals.size(); ++i) {
+			out << result.residuals[i];
+			if (i + 1 < result.residuals.size()) out << ", ";
+		}
+		out << "]\n";
+
 		dumpBlock("lidar_to_camera", "p_camera = R * p_lidar + t", result.R, result.t);
 
 		auto inv = result.inverse();
