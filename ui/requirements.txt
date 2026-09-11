@@ -1,4 +1,17 @@
+# Web UI + live capture backend.
+#
+# Everything here installs into a plain virtualenv on any OS. ROS 2 is NOT
+# listed and is NOT required: live ROS sources are picked up from the ambient
+# environment when you `source /opt/ros/$ROS_DISTRO/setup.bash` before starting
+# the server, and every other feature (bag replay, USB cameras, the simulated
+# rig, offline datasets) works without ROS at all.
+
 fastapi>=0.110
 uvicorn[standard]>=0.27
 pyyaml>=6.0
 python-multipart>=0.0.9
+
+# Live capture
+numpy>=1.24                  # point-cloud maths, RANSAC, plane fitting
+opencv-python-headless>=4.8  # checkerboard detection, solvePnP, JPEG encoding
+rosbags>=0.9                 # pure-Python rosbag2 reader, so replay needs no ROS

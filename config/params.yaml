@@ -21,7 +21,7 @@ data:
   pointclouds_dir: "data/pointclouds"
   # Optional: if set, skip detectors and read pre-extracted plane observations.
   # Used for ACFR-style datasets where checkerboard planes are already segmented.
-  poses_csv: "data/vlp/poses.csv"
+  poses_csv: "data/live/live_session/poses.csv"
 
 
 output: 

@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # Fast feedback: the Python layer needs no C++ toolchain, so it fails in
+  # under a minute rather than after a full dependency build.
+  python:
+    name: Python layer
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r ui/requirements.txt
+
+      - name: Import every module
+        run: |
+          python -c "
+          import ui.app, ui.live_api
+          import ui.sensors.base, ui.sensors.pointcloud2, ui.sensors.replay
+          import ui.sensors.opencv_cam, ui.sensors.synthetic, ui.sensors.registry
+          import ui.live.detect, ui.live.plane_fit, ui.live.quality, ui.live.session
+          print('all modules import without ROS present')
+          "
+
+      - name: Detection and geometry checks
+        run: python tools/test_detection.py
+
+  build:
+    name: Solver + end-to-end validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install C++ dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake build-essential libopencv-dev libpcl-dev \
+            libeigen3-dev libceres-dev libyaml-cpp-dev
+
+      - name: Build
+        run: |
+          cmake -S . -B build
+          cmake --build build -j$(nproc)
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: pip
+
+      - name: Install Python dependencies
+        run: pip install -r ui/requirements.txt
+
+      - name: End-to-end validation against ground truth
+        run: python tools/validate_live_pipeline.py --poses 12

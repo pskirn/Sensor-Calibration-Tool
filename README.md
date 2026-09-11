@@ -1,134 +1,449 @@
-# Multi-Sensor Calibration Platform
+# Calibration Studio — camera × LiDAR extrinsic calibration
 
-A platform for calibrating sensors on a robot — the goal is a unified tool where you can click and calibrate any sensor without manual pipeline wrangling. Currently focused on camera and LiDAR; IMU, ultrasonic, temperature, pressure, and other sensors will be added incrementally.
+A web UI and solver for finding the rigid transform between a camera and a LiDAR.
+Point it at your sensors, hold a checkerboard in front of them, and it tells you
+where they are relative to each other — with live feedback on whether the poses
+you are collecting can actually determine the answer.
 
-## Current Status
+Calibration maths is well understood. Calibration *tooling* is not: it is
+usually a CLI, a folder of files you must name correctly, and a YAML file whose
+fields are documented in a source comment. This project keeps the validated
+maths and fixes the part that wastes your afternoon.
 
-End-to-end camera–LiDAR extrinsic calibration pipeline implemented and numerically validated against the ACFR VLP-16 sample dataset (all six DoF within 1 σ of published ground-truth mean; mean residual 3.8 mm across 40 poses). Ceres-based non-linear optimizer is implemented (quaternion + translation, plane-normal alignment + per-corner point-on-plane residuals).
+![Live board detection](docs/images/live_detection.jpg)
 
-## Tech Stack
+**Status:** camera–LiDAR extrinsics work end to end and are numerically
+validated (see [Accuracy](#accuracy)). Other sensor types are not implemented.
 
-- **C++17**
-- **OpenCV** — checkerboard detection, camera intrinsics, visualization
-- **PCL 1.12** — point cloud loading, ROI filtering, RANSAC plane fitting
-- **Eigen3** — linear algebra, rotation/translation types
-- **Ceres Solver** — non-linear optimization for the LiDAR→camera rigid transform
-- **yaml-cpp** — configuration loading
+---
 
-## Build
+## Try it in two minutes, with no hardware
 
-Requires OpenCV, PCL 1.12, Eigen3 3.3+, Ceres solver, yaml-cpp.
+The tool ships with a **simulated rig**: a virtual camera and LiDAR observing a
+checkerboard, with a ground-truth extrinsic baked in. The entire live workflow
+runs against it, so you can see what the tool does before wiring anything up —
+and check how close the solver gets to an answer that is known exactly.
 
 ```bash
-cmake -S . -B build
-cmake --build build -j$(nproc)
+# 1. build the solver (see Requirements below for the C++ dependencies)
+cmake -S . -B build && cmake --build build -j$(nproc)
+
+# 2. set up the Python environment
+python3 -m venv ui/.venv
+ui/.venv/bin/pip install -r ui/requirements.txt
+
+# 3. start the app
+ui/.venv/bin/python -m uvicorn ui.app:app --port 8000
 ```
 
-Produces two executables in `build/`:
-- `camera_lidar_calibration` — main extrinsic calibration pipeline
-- `compute_intrinsics` — standalone camera intrinsic calibration tool
+Open <http://localhost:8000>, pick **Simulated camera** and **Simulated LiDAR**
+(they are preselected, and the board and ROI fields are already filled in
+correctly), press **Start streaming**, then capture poses as the board moves.
 
-## Usage
+Prefer the terminal? The same thing runs headless as a self-test that compares
+the result against ground truth and exits non-zero if it drifts:
 
-**Step 1 — compute camera intrinsics** (once per camera setup):
 ```bash
-./build/compute_intrinsics <images_folder> <board_cols> <board_rows> <square_size_meters>
-# Writes results to config/camera.yaml
+ui/.venv/bin/python tools/validate_live_pipeline.py --poses 12
 ```
 
-**Step 2 — run extrinsic calibration** (must be run from `build/` so relative paths resolve):
+```
+  rotation error    : 0.0300 deg
+  translation error : 4.44 mm
+  solver mean residual: 0.80 mm (max 1.86 mm)
+  PASS
+```
+
+---
+
+## What "works with any LiDAR" means
+
+Universality lives at the **point-cloud level**, not the driver level.
+
+Every LiDAR ultimately produces the same thing — an array of XYZ points. What
+differs is the transport: Livox speaks SDK2 over UDP, Ouster speaks TCP plus a
+JSON descriptor, Velodyne emits raw UDP packets that need a calibration XML,
+and Hesai and RoboSense each have their own. Writing an adapter per vendor is a
+treadmill.
+
+The escape hatch is that **every vendor ships a ROS 2 driver publishing
+`sensor_msgs/PointCloud2`**. So one adapter covers the entire market, including
+sensors released after this was written. `PointCloud2` is self-describing: a
+field table states each field's name, byte offset and numeric type, so the
+decoder reads the layout rather than assuming one. That matters — the layouts
+really are all different:
+
+| Sensor | Record layout |
+|---|---|
+| Velodyne VLP-16 | `x,y,z` f32, `intensity` f32, `ring` u16, `time` f32 |
+| Ouster OS-1 | `x,y,z` f32, `intensity` f32, `t` u32, `reflectivity` u16, … |
+| Livox Mid-360 | `x,y,z` f32, `t` u32, `intensity` f32, `tag` u8, `line` u8 — 22 bytes, unpadded |
+| Hesai | `x,y,z` f32, `intensity` f32, `timestamp` f64, `ring` u16 |
+
+### Supported inputs
+
+| Backend | Covers | Needs ROS? |
+|---|---|---|
+| **ROS 2 topics** | any LiDAR or camera with a ROS driver (`PointCloud2`, `Image`, `CompressedImage`) | yes, at runtime |
+| **rosbag2 replay** | recorded sessions, replayed on the bag's own clock | no — pure-Python reader |
+| **OpenCV capture** | USB/V4L2 webcams, RTSP/IP cameras, video files | no |
+| **Simulated rig** | no hardware at all; ground truth known | no |
+
+### Plugging in sensors: USB vs Ethernet
+
+These behave differently, and the difference is not arbitrary.
+
+**A USB camera appears by itself.** Plug it in and it is in the dropdown
+immediately, because the kernel implements UVC — a standard every webcam speaks —
+and exposes it as `/dev/video0`. Select it and the preview starts.
+
+**An Ethernet LiDAR does not,** and cannot. Ethernet is a cable, not a data
+standard. The sensor simply emits proprietary UDP at your NIC; nothing in the
+operating system knows a sensor exists, and there is no `/dev/*` entry to
+enumerate. Something has to speak the vendor's protocol first, and that is the
+vendor's ROS driver:
+
+```
+Mid-360 ──Ethernet──▶ livox_ros_driver2 ──▶ /livox/points ──▶ appears in the dropdown
+```
+
+Start the driver and the topic shows up in the LiDAR list like any other source.
+
+To make that failure legible rather than mysterious, the setup card has a
+**"LiDAR not listed? Scan the network"** button. It reports what is actually on
+the wire — cable link state, whether your host holds an address on the sensor's
+subnet, and whether UDP is arriving on a known LiDAR port — then gives you the
+exact command to fix it:
+
+```
+[found] Livox LiDAR streaming on UDP 56300
+        471 packets from 192.168.1.164 in 1.5s, and nothing is consuming them.
+        -> ros2 launch livox_ros_driver2 msg_MID360_launch.py
+```
+
+The scan binds those ports **exclusively**, so it can never steal packets from a
+driver that is already running — if the port is held, it says so and touches
+nothing.
+
+### One thing that is genuinely not universal
+
+**Scan pattern.** A spinning LiDAR delivers a full sweep per revolution, so one
+message is a usable frame. A non-repetitive scanner like the Livox Mid-360
+paints a sparse pattern that only fills in over time — a single message is far
+too thin to fit a board plane to.
+
+So the accumulation window is an explicit setting rather than something hidden:
+
+- **Spinning** (Velodyne, Ouster, Hesai, RoboSense) → `0` s, lowest latency.
+- **Non-repetitive** (Livox) → `1`–`2` s. On a Mid-360 this takes a 24 000-point
+  message up to roughly 360 000 points, which is what makes the board segmentable.
+
+---
+
+## The workflow
+
+### Live capture
+
+```
+  choose sources ──▶ stream + detect ──▶ capture poses ──▶ solve ──▶ export
+   camera + lidar     live feedback      guided by         Ceres     YAML,
+   auto-discovered    on both sensors    quality meters              both conventions
+```
+
+**1 — Sources & board.** The app scans for ROS topics, V4L2 cameras and rosbag
+recordings, and lists what it finds. Enter your checkerboard geometry as
+**internal corner counts, not squares** (an 8×6-square board has 7×5 internal
+corners — getting this wrong is the single most common reason detection never
+fires, so the form says so at the point of entry). Set the LiDAR ROI to a box
+around where you will hold the board.
+
+If the camera publishes a `camera_info` topic, intrinsics are taken from it
+automatically — preferred over `config/camera.yaml`, because a topic is
+guaranteed to describe the stream you are actually capturing, whereas a file can
+silently belong to a different camera or resolution.
+
+**2 — Capture.** You get a live camera view with detected corners drawn on it,
+and a live 3D view of the cloud showing the ROI box and exactly which points
+RANSAC latched onto — which is the fastest way to see *why* a detection failed.
+Press **Capture pose** (or the space bar) when both sensors see the board.
+
+Capture runs detection twice, a moment apart, and **refuses the pose if the board
+moved in between**. This is a correctness gate, not fussiness: the camera frame
+and the LiDAR frame are grabbed independently, so a board still in motion can be
+in two different places in the two sensors. The solver cannot detect that — it
+will fit a rigid transform to the inconsistent pair and return a confident,
+wrong answer. In testing, a few such pairs moved the recovered translation by
+~200 mm and flipped two of its signs while the residuals still looked fine. So
+hold the board still for a beat before capturing.
+
+Three meters track whether the set you are collecting can actually determine the
+answer:
+
+- **Poses** — 9 or more gives least-squares enough redundancy to average out noise.
+- **Orientation span** — explained below; this is the one that matters most.
+- **Image coverage** — how much of the frame the board has visited. Distortion is
+  worst at the edges, so centre-only poses leave the corners unmodelled.
+
+**3 — Solve.** The captured poses are written as a `poses.csv` and handed to the
+same C++ Ceres solver the offline path uses, so the two can never drift apart.
+Results appear as both transform conventions plus a per-pose residual chart, and
+the session is saved under `data/live/<name>/` so it can be re-solved later.
+
+### Offline dataset
+
+Already have plane observations? Switch to **Dataset** mode, drop in a
+`poses.csv`, inspect the poses in 3D, and solve. The "after calibration" toggle
+transforms the LiDAR planes into the camera frame — when the calibration is
+good, the orange boards land on the cyan ones.
+
+---
+
+## Why the tool nags you to rotate the board
+
+This is the part most calibration tools leave you to discover the hard way.
+
+The solve is driven by two residuals: normals must agree
+(`R·n_lidar ≈ n_camera`), and each LiDAR board point must land on the camera's
+board plane (`n_cam·(R·p_lid + t) = d_cam`).
+
+Look at what that second one can see. A board plane only constrains the
+component of translation **along its own normal**. Slide the sensor pair
+*parallel* to the board and every point-on-plane residual is completely
+unchanged. So a single board orientation leaves two translation directions
+unobservable — and a hundred frames of the board held at the same angle leave
+them exactly as unobservable. More data does not help; different data does.
+
+Recovering all three translation components therefore requires board normals
+that **span 3D**. The tool measures this directly as the ratio of the smallest
+to largest singular value of the stacked normals, reported as **orientation
+span**: near 0 means near-parallel boards and an ill-conditioned solve, higher
+means the normals cover all three axes.
+
+Below 0.15 the app refuses to solve and tells you to tilt the board, because the
+alternative is a confident-looking answer with meaningless translation. Residuals
+will not warn you — a degenerate set can fit beautifully and still be wrong.
+
+Practically: tilt the board left, right, up and down; vary its distance; and work
+it into the frame corners as well as the centre.
+
+---
+
+## Requirements
+
+**Solver (C++17):** OpenCV, PCL 1.12, Eigen3 ≥ 3.3, Ceres, yaml-cpp.
+
 ```bash
+# Ubuntu / Debian
+sudo apt install libopencv-dev libpcl-dev libeigen3-dev libceres-dev libyaml-cpp-dev cmake build-essential
+```
+
+**UI:** Python ≥ 3.9. `ui/requirements.txt` installs into a plain virtualenv on
+any OS; ROS is not among the dependencies.
+
+**For live ROS sources**, source your ROS setup before starting the server:
+
+```bash
+source /opt/ros/humble/setup.bash
+ui/.venv/bin/python -m uvicorn ui.app:app --port 8000
+```
+
+That is sufficient even for an ordinary virtualenv — sourcing ROS exports
+`PYTHONPATH`, which virtualenvs honour, so `rclpy` resolves without
+`--system-site-packages`. The sidebar shows whether ROS was detected.
+
+### Where to run it
+
+**Everything on one machine (simplest).** Sensors plug into the robot computer,
+which also runs this server. Open the UI from any browser on the network:
+
+```bash
+ui/.venv/bin/python -m uvicorn ui.app:app --host 0.0.0.0 --port 8000
+# then browse to http://<robot-ip>:8000
+```
+
+`--host 0.0.0.0` matters — the default binds to localhost only, so a browser on
+another machine cannot reach it.
+
+**Split: drivers on the robot, UI on a laptop.** Both machines must be on the
+same ROS 2 graph, which means:
+
+```bash
+export ROS_DOMAIN_ID=0          # identical on both machines
+export ROS_LOCALHOST_ONLY=0     # must NOT be 1, or nothing crosses the network
+```
+
+They also need multicast between them for discovery — check with
+`ros2 topic list` on the laptop before starting the UI. If the topics do not
+appear there, they will not appear in this tool either; that is a ROS networking
+problem, not a calibration one. Wi-Fi often blocks multicast, so prefer a wired
+link or a discovery server.
+
+Note the LiDAR itself does **not** need to be reachable from the laptop — only
+the ROS topics do, since the driver on the robot has already translated the
+proprietary UDP into `PointCloud2`.
+
+---
+
+## Command line
+
+The UI is a convenience, not a requirement.
+
+```bash
+# camera intrinsics (once per camera)
+./build/compute_intrinsics <images_folder> <board_cols> <board_rows> <square_size_m>
+# writes config/camera.yaml
+
+# extrinsics — run from build/ so relative paths resolve
 cd build && ./camera_lidar_calibration
 ```
 
-All runtime parameters are controlled via `config/params.yaml`:
+Both read `config/params.yaml`:
 
-```
-camera.board_rows / board_cols / square_size  — checkerboard geometry
-camera.intrinsics_file                        — path to camera.yaml
-lidar.roi_min / roi_max                       — PassThrough filter bounds (meters)
-lidar.ransac_threshold / ransac_max_iterations
-data.images_dir / pointclouds_dir             — input data paths
-output.result_file                            — output YAML path
-output.generate_visualization                 — save detected_frame_N.png to results/
-```
+| Key | Meaning |
+|---|---|
+| `camera.board_rows` / `board_cols` / `square_size` | checkerboard geometry (internal corners) |
+| `camera.intrinsics_file` | path to `camera.yaml` |
+| `lidar.roi_min` / `roi_max` | ROI box bounds, metres |
+| `lidar.ransac_threshold` / `ransac_max_iterations` | plane segmentation |
+| `data.images_dir` / `pointclouds_dir` | raw input for the detector path |
+| `data.poses_csv` | if set, skip detectors and read pre-extracted planes |
+| `output.result_file` | where the result YAML goes |
 
-## How It Works
+Results are written in **both conventions**, since half the tools in robotics
+expect each:
 
-The pipeline runs in two phases:
-
-1. **Camera detection** — finds checkerboard corners in each image, runs `solvePnP`, extracts the board plane normal and distance in camera frame.
-2. **LiDAR detection** — loads each point cloud, applies ROI filtering using the config bounds, runs RANSAC plane segmentation to extract the dominant plane normal and distance in LiDAR frame.
-
-Matched plane pairs (same calibration pose seen by both sensors) are fed into the Ceres optimizer, which solves for the 6-DOF rigid transform T = [R|t] mapping the LiDAR frame to the camera frame. The cost function combines plane-normal alignment (R · n_lidar ≈ n_camera) with per-corner point-on-plane residuals; rotation is parametrised as a unit quaternion via Ceres's `EigenQuaternionManifold`. Results are written to `results/calibration.yaml` in both `lidar_to_camera` and `camera_to_lidar` conventions.
-
-**Alternate input path:** if `data.poses_csv` is set in `params.yaml`, the binary skips the camera and LiDAR detectors and reads pre-extracted plane observations (centroid + normal + 4 corners per pose, mm units) directly. This is the format used by ACFR/MATLAB-style sample datasets and is the recommended way to validate the optimizer in isolation.
-
-## Data Layout
-
-```
-data/<dataset>/poses.csv  — pre-extracted plane observations (ACFR/MATLAB format)
-data/uploads/<name>/      — datasets uploaded through the UI
-data/images/              — raw calibration images for the detector path (JPG/PNG)
-data/pointclouds/         — raw point clouds for the detector path (PCD format)
-results/calibration.yaml  — solver output (both transform conventions + per-pose residuals)
-config/params.yaml        — runtime configuration
-config/camera.yaml        — camera intrinsics (generated by compute_intrinsics)
+```yaml
+lidar_to_camera:      # p_camera = R * p_lidar + t
+camera_to_lidar:      # p_lidar  = R * p_camera + t
 ```
 
-## Web UI
+---
 
-A small FastAPI + vanilla-JS UI lives in [`ui/`](ui/). It lets you pick or drop a dataset, see the input plane observations in 3D, run the calibration, and verify the fit by overlaying the transformed LiDAR planes on the camera planes.
+## Accuracy
 
-### Install (once)
+**Against a public dataset.** The ACFR / MATLAB Lidar Toolbox VLP-16 sample, 40
+poses, compared to the published ground-truth mean of 50 Monte-Carlo trials —
+all six degrees of freedom land within 1 σ:
+
+| Parameter | Ours | Ground truth | Δ |
+|---|---|---|---|
+| roll | −1.6931 | −1.6954 | +0.20 σ |
+| pitch | −0.0238 | −0.0209 | −0.27 σ |
+| yaw | −1.4976 | −1.4929 | −0.68 σ |
+| x | 0.0629 m | 0.0626 m | +0.05 σ |
+| y | 0.0104 m | 0.0039 m | +0.36 σ |
+| z | −0.1861 m | −0.1958 m | +0.33 σ |
+
+Mean point-to-plane residual 3.8 mm, max 13 mm; Ceres converged in 6 iterations
+from identity.
+
+**Against known ground truth, end to end.** The ACFR data starts from
+pre-extracted planes, so it never exercises detection. The simulated rig does —
+`tools/validate_live_pipeline.py` runs board detection, capture gating, CSV
+export and the solver against an exactly-known extrinsic, and recovers it to
+**0.00° and 4.5 mm** from 12 poses, with a 0.9 mm mean residual.
+
+The same result comes out of the browser: driving the real UI through 14 capture
+clicks (11 accepted, 3 refused for board motion) recovers the extrinsic to
+**0.00° and 5.2 mm**.
 
 ```bash
-cd ui
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+ui/.venv/bin/python tools/test_detection.py          # 26 checks, no C++ needed
+ui/.venv/bin/python tools/validate_live_pipeline.py  # full pipeline vs truth
 ```
 
-The UI needs the C++ binary at `build/camera_lidar_calibration` — build the project first (see [Build](#build) above).
+---
 
-### Run
+## How it works
 
-From the **project root** (not from `ui/`):
+1. **Camera** — `findChessboardCorners` + sub-pixel refinement + `solvePnP`
+   gives the board pose; the board's Z axis in the camera frame is the plane normal.
+2. **LiDAR** — crop to the ROI, RANSAC the dominant plane, keep the largest
+   connected cluster (voxel flood fill), refit by SVD over all inliers, then
+   check the footprint against the known board size. That last check is what
+   stops a wall from being reported as a confident detection: a wall fits a
+   plane beautifully, it is just the wrong plane.
+3. **Solve** — Ceres, with rotation as a unit quaternion on `EigenQuaternionManifold`,
+   minimising normal-alignment plus point-on-plane residuals over all poses.
 
-```bash
-uvicorn ui.app:app --port 8000
+Note that the solver never matches LiDAR corners to specific physical corners —
+they only need to *lie on* the camera's board plane. That is why the LiDAR side
+can use the corners of the enclosing rectangle, which are exactly on-plane by
+construction and maximally spread.
+
+---
+
+## Project layout
+
+```
+src/, include/          C++ solver, detectors, CSV loader
+ui/app.py               FastAPI: datasets, solving, upload
+ui/live_api.py          FastAPI: live capture endpoints
+ui/sensors/             vendor-neutral input layer
+  base.py                 PointCloudSource / ImageSource + accumulation
+  pointcloud2.py          self-describing PointCloud2 decoder
+  ros2_live.py            live ROS 2 topics
+  replay.py               rosbag2 replay (no ROS needed)
+  opencv_cam.py           USB / RTSP cameras
+  synthetic.py            simulated rig with known ground truth
+ui/live/                detection, plane fitting, quality metrics, session
+ui/static/              vanilla-JS frontend, no build step
+tools/                  end-to-end validation
+config/                 params.yaml, camera.yaml
 ```
 
-Then open <http://localhost:8000>.
+The frontend is deliberately dependency-free vanilla JS — no build step, no
+`node_modules`. Clone and run.
 
-### What you see
+---
 
-The page has three sections, top to bottom:
+## Troubleshooting
 
-1. **Dataset** — dropdown of every folder under `data/` (and `data/uploads/`) that contains a `poses.csv`. A drop-zone below lets you drag-and-drop a new `poses.csv`; the upload is saved under `data/uploads/<name>/` and immediately appears in the dropdown.
-2. **Input data** — a 3D viewer (three.js) showing each detected board as an outlined quad with a normal arrow. Cyan quads are camera-frame boards, orange quads are LiDAR-frame boards. The "before calibration" toggle shows both in their original frames (so they don't overlap); the "after calibration" toggle (enabled after running) shows the LiDAR boards transformed into the camera frame in green — they should now coincide with the cyan boards. The closer the overlap, the better the calibration.
-3. **Run calibration** — clicking the button shells out to the C++ binary, then displays: a summary (poses used, final solver cost, mean / max per-pose residual in metres), both transform conventions (`lidar_to_camera` and `camera_to_lidar`) with translation, RPY, quaternion, and rotation matrix, a bar chart of per-pose residual, and the raw solver output in a collapsible panel.
+**"No N×M checkerboard found."** The counts are *internal corners*, not squares.
+An 8×6-square board is 7×5. Also check the whole board is visible and reasonably
+lit.
 
-### Dataset format
+**"Only N points inside the ROI box."** The ROI is in the **LiDAR** frame, in
+metres. Watch the 3D view — the blue box is the ROI; move it until the board
+sits inside.
 
-The UI currently consumes ACFR / MATLAB Lidar Toolbox style `poses.csv` files: 19 lines per pose, units in millimetres, in this layout:
+**"Plane is A×B m but the board should be C×D m."** RANSAC found a wall or the
+floor. Tighten the ROI so the board is the dominant plane inside it.
 
-```
-lines 1     camera centroid (x, y, z)
-lines 2     camera plane normal (unit vector)
-lines 3-6   camera-frame board corners (4 × xyz)
-lines 7     LiDAR centroid
-lines 8     LiDAR plane normal
-lines 9-12  LiDAR-frame board corners (4 × xyz)
-lines 13-18 board metadata (sizes, residuals)
-lines 19    pose index
-```
+**My Ethernet LiDAR isn't in the dropdown.** Expected until its driver is
+running — see [USB vs Ethernet](#plugging-in-sensors-usb-vs-ethernet). Press
+**"LiDAR not listed? Scan the network"**; it will tell you whether the cable is
+live, whether your host IP is on the sensor's subnet, and whether the sensor is
+streaming, with the command to fix whichever is wrong.
 
-A raw-data ingestion path (images + PCDs → detectors → planes) also exists in the C++ binary and can be enabled by removing the `data.poses_csv` field from `params.yaml`. UI support for the raw path is planned.
+**Capture says "the board is still moving."** Working as intended — hold the
+board steady for a beat. It is refusing a pose that would silently corrupt the
+result.
 
-### Roadmap (UI)
+**Topic lists but no frames arrive.** Usually a QoS mismatch. This tool
+subscribes BEST_EFFORT/VOLATILE, which is the permissive end and accepts stricter
+publishers, so if this still happens check the topic is genuinely publishing
+(`ros2 topic hz`).
 
-- **v0.3** — overlay the per-pose residual on the 3D viewer (color the aligned quad by error magnitude).
-- **v0.3** — full file picker for the raw-data path: images + point clouds + intrinsics in one upload.
-- **v0.4** — live capture: connect a camera + LiDAR (ROS bridge or direct drivers), collect poses interactively.
-- **v0.5+** — IMU, ultrasonic, temperature, pressure modules using the same load → visualise → solve → verify shell.
+**Solve refused: "orientation span too low."** Working as intended — see
+[why the tool nags you](#why-the-tool-nags-you-to-rotate-the-board). Capture
+poses with the board tilted in different directions.
+
+**Livox cloud looks sparse.** Raise the accumulation window to 1–2 s.
+
+---
+
+## Roadmap
+
+- Raw image + PCD folders as a live-mode input (the C++ path already supports it)
+- Multi-camera sessions chained through the LiDAR, for rigs with no camera overlap
+- Re-validation mode: check a stored extrinsic against live data and flag drift
+- IMU, once the camera–LiDAR slice is fully polished
+
+Deliberately **not** planned: a "universal, any sensor" v1. Each sensor pair has
+its own algorithm, capture protocol and failure modes. One pair done properly is
+worth more than five done vaguely.
+
+## License
+
+GPL-3.0 — see [LICENSE](LICENSE).

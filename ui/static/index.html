@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Camera-LiDAR Calibration</title>
+  <title>Sensor Calibration Studio</title>
+  <link rel="icon" href="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'&gt;&lt;rect width='32' height='32' rx='7' fill='%234fb3ff'/&gt;&lt;circle cx='16' cy='16' r='6' fill='%2306101c'/&gt;&lt;/svg&gt;" />
   <link rel="stylesheet" href="/style.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script type="importmap">
@@ -16,86 +17,290 @@
   </script>
 </head>
 <body>
-  <header>
-    <h1>Camera-LiDAR Calibration</h1>
-    <p class="tagline">Drop a dataset, see the input, run the optimizer, verify the fit visually.</p>
-  </header>
-
-  <main>
-    <!-- 1. DATASET ----------------------------------------------------- -->
-    <section class="card">
-      <h2>1. Dataset</h2>
-      <div class="dataset-row">
-        <label>Select:
-          <select id="dataset-select"></select>
-        </label>
-        <button id="refresh-datasets" class="btn-secondary" title="Re-scan data/ folder">⟳</button>
-        <span id="dataset-info" class="muted"></span>
+  <div class="shell">
+    <!-- ============ SIDEBAR ============ -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">CS</div>
+        <div>
+          <div class="brand-name">Calibration Studio</div>
+          <div class="brand-sub">camera &times; LiDAR</div>
+        </div>
       </div>
 
-      <div id="dropzone" class="dropzone">
-        Drop a <code>poses.csv</code> here, or click to choose a file
-        <input type="file" id="file-input" accept=".csv" hidden />
-      </div>
-      <p id="upload-msg" class="muted small"></p>
-    </section>
+      <nav class="nav">
+        <button class="nav-item active" data-mode="live">
+          <span class="nav-icon">&#9679;</span>
+          <span>
+            <strong>Live capture</strong>
+            <small>Stream sensors, capture poses</small>
+          </span>
+        </button>
+        <button class="nav-item" data-mode="offline">
+          <span class="nav-icon">&#9636;</span>
+          <span>
+            <strong>Dataset</strong>
+            <small>Solve a recorded poses.csv</small>
+          </span>
+        </button>
+      </nav>
 
-    <!-- 2. INPUT VIZ --------------------------------------------------- -->
-    <section class="card">
-      <h2>2. Input data</h2>
-      <p class="muted small">
-        Each detected board plane is drawn as an outlined quad with a normal arrow.
-        Camera-frame boards are <span class="legend cam">cyan</span>;
-        LiDAR-frame boards are <span class="legend lid">orange</span>.
-      </p>
-      <div class="view-controls">
-        <label><input type="radio" name="view-mode" value="before" checked /> Before calibration (separate frames)</label>
-        <label><input type="radio" name="view-mode" value="after"  disabled /> After calibration (LiDAR → camera overlay) <span id="after-hint" class="muted small">— run calibration first</span></label>
-      </div>
-      <div id="viewer-container" class="viewer"></div>
-    </section>
-
-    <!-- 3. RUN + RESULTS ---------------------------------------------- -->
-    <section class="card">
-      <h2>3. Run calibration</h2>
-      <div class="controls">
-        <button id="run-btn">Run Calibration</button>
-        <span id="status" class="status idle">Ready</span>
+      <div class="env">
+        <div class="env-title">Environment</div>
+        <div class="env-row"><span>Solver binary</span><span id="env-binary" class="pill">…</span></div>
+        <div class="env-row"><span>ROS 2</span><span id="env-ros" class="pill">…</span></div>
+        <div class="env-row"><span>Intrinsics file</span><span id="env-intrinsics" class="pill">…</span></div>
       </div>
 
-      <div id="summary" class="summary-grid-wrap hidden">
+      <div class="sidebar-foot">
+        <a href="https://github.com/pskirn/camera_lidar_calibration" target="_blank" rel="noopener">Docs &amp; source</a>
+      </div>
+    </aside>
+
+    <!-- ============ MAIN ============ -->
+    <main class="main">
+
+      <!-- ---------- LIVE MODE ---------- -->
+      <section id="mode-live" class="mode active">
+        <header class="page-head">
+          <div>
+            <h1>Live capture</h1>
+            <p class="sub">Stream a camera and a LiDAR, capture board poses with live feedback, then solve.</p>
+          </div>
+          <div class="head-actions">
+            <span id="live-status" class="status idle">Not started</span>
+          </div>
+        </header>
+
+        <!-- STEP 1: setup -->
+        <section id="live-setup" class="card">
+          <div class="card-head">
+            <h2><span class="step">1</span> Sources &amp; board</h2>
+            <button id="refresh-sources" class="btn-ghost" title="Re-scan for sensors">Rescan</button>
+          </div>
+
+          <div id="sim-callout" class="callout hidden">
+            <strong>No hardware? Use the simulated rig.</strong>
+            It generates a camera and LiDAR observing a checkerboard with a known
+            ground-truth extrinsic, so you can try the whole workflow and see how
+            close the solver gets.
+          </div>
+
+          <div class="grid-2">
+            <label class="field">
+              <span class="label">Camera source</span>
+              <select id="camera-source"></select>
+              <small id="camera-hint" class="hint"></small>
+            </label>
+            <label class="field">
+              <span class="label">LiDAR source</span>
+              <select id="lidar-source"></select>
+              <small id="lidar-hint" class="hint"></small>
+            </label>
+          </div>
+
+          <div class="diag-row">
+            <button id="diagnose-btn" class="btn-ghost">LiDAR not listed? Scan the network</button>
+            <span class="muted small">
+              USB cameras appear automatically; an Ethernet LiDAR needs its vendor driver running first.
+            </span>
+          </div>
+          <div id="diagnostics" class="diagnostics hidden"></div>
+
+          <h3 class="section-label">Checkerboard</h3>
+          <div class="grid-4">
+            <label class="field">
+              <span class="label">Corners across</span>
+              <input type="number" id="board-cols" min="2" step="1" />
+              <small class="hint">internal, not squares</small>
+            </label>
+            <label class="field">
+              <span class="label">Corners down</span>
+              <input type="number" id="board-rows" min="2" step="1" />
+              <small class="hint">internal, not squares</small>
+            </label>
+            <label class="field">
+              <span class="label">Square size (m)</span>
+              <input type="number" id="board-square" step="0.001" />
+            </label>
+            <label class="field">
+              <span class="label">Accumulation (s)</span>
+              <input type="number" id="accum-window" step="0.1" min="0" />
+              <small class="hint">0 for spinning LiDAR</small>
+            </label>
+          </div>
+
+          <h3 class="section-label">LiDAR region of interest <small class="muted">— the box RANSAC searches, in LiDAR frame metres</small></h3>
+          <div class="grid-6">
+            <label class="field"><span class="label">x min</span><input type="number" id="roi-xmin" step="0.1" /></label>
+            <label class="field"><span class="label">x max</span><input type="number" id="roi-xmax" step="0.1" /></label>
+            <label class="field"><span class="label">y min</span><input type="number" id="roi-ymin" step="0.1" /></label>
+            <label class="field"><span class="label">y max</span><input type="number" id="roi-ymax" step="0.1" /></label>
+            <label class="field"><span class="label">z min</span><input type="number" id="roi-zmin" step="0.1" /></label>
+            <label class="field"><span class="label">z max</span><input type="number" id="roi-zmax" step="0.1" /></label>
+          </div>
+
+          <p id="setup-note" class="note"></p>
+
+          <div class="card-actions">
+            <button id="start-live" class="btn-primary">Start streaming</button>
+            <button id="stop-live" class="btn-secondary hidden">Stop</button>
+            <span id="intrinsics-note" class="muted small"></span>
+          </div>
+        </section>
+
+        <!-- STEP 2: capture -->
+        <section id="live-capture" class="card hidden">
+          <div class="card-head">
+            <h2><span class="step">2</span> Capture poses</h2>
+            <span id="capture-count" class="chip">0 captured</span>
+          </div>
+
+          <div class="live-panes">
+            <div class="pane">
+              <div class="pane-head">
+                <span>Camera</span>
+                <span id="cam-badge" class="badge">…</span>
+              </div>
+              <div class="preview-wrap">
+                <img id="preview" alt="Live camera preview" />
+              </div>
+            </div>
+            <div class="pane">
+              <div class="pane-head">
+                <span>LiDAR</span>
+                <span id="lid-badge" class="badge">…</span>
+              </div>
+              <div id="cloud-view" class="preview-wrap viewer"></div>
+              <div class="pane-legend">
+                <span><i class="dot cloud"></i>cloud</span>
+                <span><i class="dot inlier"></i>board plane</span>
+                <span><i class="dot roi"></i>ROI box</span>
+              </div>
+            </div>
+          </div>
+
+          <div id="guidance" class="guidance"></div>
+
+          <div class="capture-bar">
+            <button id="capture-btn" class="btn-primary big" disabled>Capture pose</button>
+            <div class="meters">
+              <div class="meter">
+                <div class="meter-head"><span>Poses</span><span id="m-poses">0</span></div>
+                <div class="bar"><div id="b-poses" class="fill"></div></div>
+              </div>
+              <div class="meter">
+                <div class="meter-head">
+                  <span title="How well the board orientations span 3D. Near-parallel boards cannot pin down translation.">Orientation span</span>
+                  <span id="m-span">0.00</span>
+                </div>
+                <div class="bar"><div id="b-span" class="fill"></div></div>
+              </div>
+              <div class="meter">
+                <div class="meter-head"><span>Image coverage</span><span id="m-cov">0%</span></div>
+                <div class="bar"><div id="b-cov" class="fill"></div></div>
+              </div>
+            </div>
+          </div>
+
+          <div id="pose-strip" class="pose-strip"></div>
+
+          <div class="card-actions">
+            <button id="finish-btn" class="btn-primary" disabled>Solve calibration</button>
+            <input type="text" id="session-name" placeholder="session name" value="live_session" />
+            <span id="finish-hint" class="muted small"></span>
+          </div>
+        </section>
+      </section>
+
+      <!-- ---------- OFFLINE MODE ---------- -->
+      <section id="mode-offline" class="mode">
+        <header class="page-head">
+          <div>
+            <h1>Dataset</h1>
+            <p class="sub">Solve a recorded <code>poses.csv</code> and inspect the fit.</p>
+          </div>
+          <div class="head-actions">
+            <span id="status" class="status idle">Ready</span>
+          </div>
+        </header>
+
+        <section class="card">
+          <div class="card-head">
+            <h2><span class="step">1</span> Choose a dataset</h2>
+            <button id="refresh-datasets" class="btn-ghost" title="Re-scan data/">Rescan</button>
+          </div>
+          <div class="dataset-row">
+            <select id="dataset-select"></select>
+            <span id="dataset-info" class="muted small"></span>
+          </div>
+          <div id="dropzone" class="dropzone">
+            Drop a <code>poses.csv</code> here, or click to choose a file
+            <input type="file" id="file-input" accept=".csv" hidden />
+          </div>
+          <p id="upload-msg" class="muted small"></p>
+        </section>
+
+        <section class="card">
+          <div class="card-head"><h2><span class="step">2</span> Inspect input</h2></div>
+          <p class="muted small">
+            Each board plane is an outlined quad with a normal arrow.
+            <span class="legend cam">Cyan</span> is camera-frame,
+            <span class="legend lid">orange</span> is LiDAR-frame.
+          </p>
+          <div class="view-controls">
+            <label><input type="radio" name="view-mode" value="before" checked /> Before calibration</label>
+            <label><input type="radio" name="view-mode" value="after" disabled /> After calibration <span id="after-hint" class="muted small">— solve first</span></label>
+          </div>
+          <div id="viewer-container" class="viewer tall"></div>
+        </section>
+
+        <section class="card">
+          <div class="card-head"><h2><span class="step">3</span> Solve</h2></div>
+          <div class="card-actions">
+            <button id="run-btn" class="btn-primary">Run calibration</button>
+          </div>
+          <div id="offline-results"></div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <!-- shared result template, cloned into whichever mode needs it -->
+  <template id="results-template">
+    <div class="results">
+      <div class="summary-grid-wrap">
         <h3>Summary</h3>
         <dl class="summary-grid">
-          <dt>Poses used</dt><dd id="s-poses">—</dd>
-          <dt>Final cost</dt><dd id="s-cost">—</dd>
-          <dt>Mean residual</dt><dd id="s-mean">—</dd>
-          <dt>Max residual</dt><dd id="s-max">—</dd>
+          <dt>Poses used</dt><dd data-f="poses">—</dd>
+          <dt>Final cost</dt><dd data-f="cost">—</dd>
+          <dt>Mean residual</dt><dd data-f="mean">—</dd>
+          <dt>Max residual</dt><dd data-f="max">—</dd>
         </dl>
       </div>
-
-      <div id="conventions" class="cards-row hidden">
+      <div class="cards-row">
         <div class="sub-card">
-          <h3>LiDAR → Camera <small>(solved)</small></h3>
-          <pre id="conv-l2c"></pre>
+          <h3>LiDAR &rarr; Camera <small>(solved)</small></h3>
+          <pre data-f="l2c"></pre>
         </div>
         <div class="sub-card">
-          <h3>Camera → LiDAR <small>(inverse)</small></h3>
-          <pre id="conv-c2l"></pre>
+          <h3>Camera &rarr; LiDAR <small>(inverse)</small></h3>
+          <pre data-f="c2l"></pre>
         </div>
       </div>
-
-      <div id="chart-card" class="hidden">
+      <div class="chart-card">
         <h3>Per-pose residual (m)</h3>
-        <canvas id="residual-chart" height="120"></canvas>
+        <canvas data-f="chart" height="110"></canvas>
       </div>
-
-      <details id="logs-card" class="hidden">
+      <details class="logs-card">
         <summary>Solver output</summary>
-        <pre id="logs"></pre>
+        <pre data-f="logs"></pre>
       </details>
-    </section>
-  </main>
+    </div>
+  </template>
 
-  <script type="module" src="/main.js"></script>
+  <div id="toasts" class="toasts"></div>
+
+  <script type="module" src="/app.js"></script>
 </body>
 </html>

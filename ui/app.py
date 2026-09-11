@@ -19,6 +19,8 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from . import live_api
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 BUILD_DIR = PROJECT_ROOT / "build"
 BINARY = BUILD_DIR / "camera_lidar_calibration"
@@ -26,6 +28,7 @@ PARAMS_FILE = PROJECT_ROOT / "config" / "params.yaml"
 RESULT_FILE = PROJECT_ROOT / "results" / "calibration.yaml"
 DATA_DIR = PROJECT_ROOT / "data"
 UPLOADS_DIR = DATA_DIR / "uploads"
+LIVE_DIR = DATA_DIR / "live"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 LINES_PER_POSE = 19  # ACFR/MATLAB poses.csv layout
@@ -39,15 +42,17 @@ app = FastAPI(title="Camera-LiDAR Calibration UI")
 def _list_datasets() -> List[dict]:
     """Any folder under data/ that contains a poses.csv counts as a dataset.
 
-    Scans direct children of data/ and also data/uploads/* so uploaded
-    datasets show up alongside hand-placed ones.
+    Scans direct children of data/, plus data/uploads/* and data/live/*, so
+    uploaded datasets and live capture sessions appear alongside hand-placed
+    ones and can be re-solved or compared later.
     """
     if not DATA_DIR.exists():
         return []
     out = []
     candidates = list(DATA_DIR.iterdir())
-    if UPLOADS_DIR.exists():
-        candidates += list(UPLOADS_DIR.iterdir())
+    for nested in (UPLOADS_DIR, LIVE_DIR):
+        if nested.exists():
+            candidates += list(nested.iterdir())
     for sub in sorted(candidates, key=lambda p: str(p)):
         if not sub.is_dir():
             continue
@@ -216,5 +221,23 @@ async def upload_dataset(file: UploadFile = File(...)) -> dict:
         "num_poses": info["num_poses"],
     }
 
+
+@app.get("/api/health")
+def health() -> dict:
+    """Environment check, so the UI can explain a broken setup instead of failing."""
+    from .sensors import ros2_live
+
+    return {
+        "binary_built": BINARY.exists(),
+        "binary_path": str(BINARY),
+        "ros2_available": ros2_live.available(),
+        "intrinsics_file": (PROJECT_ROOT / "config" / "camera.yaml").exists(),
+        "datasets": len(_list_datasets()),
+    }
+
+
+# Registered after the API routes above but before the static mount, since the
+# mount at "/" would otherwise shadow every path that follows it.
+app.include_router(live_api.router)
 
 app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
