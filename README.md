@@ -189,6 +189,30 @@ same C++ Ceres solver the offline path uses, so the two can never drift apart.
 Results appear as both transform conventions plus a per-pose residual chart, and
 the session is saved under `data/live/<name>/` so it can be re-solved later.
 
+### Capture by recording a bag (recommended on robots)
+
+You do not need the UI talking to live sensors at all. Record a short bag on
+the robot with the checkerboard in view:
+
+```bash
+ros2 bag record /livox/lidar /image /camera_info
+```
+
+Copy the bag anywhere this tool runs — the bag replays through the exact same
+live pipeline (pick it as both the camera and LiDAR source), with intrinsics
+read straight from the recorded `camera_info`. Replay needs **no ROS
+installed**: the reader is pure Python. Bags are discovered automatically from
+`livox/` and `data/bags/`.
+
+This path is verified against real Livox recordings: the self-describing
+decoder handles Livox's unpadded 22-byte point layout, `camera_info`
+extraction, and 1–2 s accumulation (24 k points/msg → ~360 k per window)
+without any vendor-specific code.
+
+Recording first is often *better* than live capture over the network: no
+Wi-Fi multicast headaches, and you can re-run detection with different ROI or
+board settings against the same data.
+
 ### Offline dataset
 
 Already have plane observations? Switch to **Dataset** mode, drop in a
